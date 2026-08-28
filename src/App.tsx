@@ -8,7 +8,7 @@ import { ContentRow, DetailModal } from './components/NetflixUI';
 import type { LocalFile } from './components/NetflixUI';
 
 export default function App() {
-  const [libraryPath, setLibraryPath] = useState('C:\\Users\\John\\Videos');
+  const [libraryPath, setLibraryPath] = useState(localStorage.getItem('netflix_library') || '');
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<LocalFile | null>(null);
@@ -85,9 +85,21 @@ export default function App() {
     setLoading(false);
   };
 
+  const handleSelectFolder = async () => {
+    if (window.electronAPI && window.electronAPI.selectFolder) {
+      const folder = await window.electronAPI.selectFolder();
+      if (folder) {
+        setLibraryPath(folder);
+        localStorage.setItem('netflix_library', folder);
+      }
+    }
+  };
+
   useEffect(() => {
-    scanLibrary();
-  }, []);
+    if (libraryPath) {
+      scanLibrary();
+    }
+  }, [libraryPath]);
 
   // Video Player Progress Tracking
   const handleTimeUpdate = () => {
@@ -158,16 +170,11 @@ export default function App() {
           <div className="flex items-center group relative cursor-pointer">
              <Search className="w-5 h-5 text-white" />
           </div>
-          <div className="flex items-center bg-black/50 border border-white/20 rounded px-2">
+          <div className="flex items-center bg-black/50 border border-white/20 rounded px-2 hover:bg-white/10 transition cursor-pointer" onClick={handleSelectFolder}>
             <FolderSearch className="w-4 h-4 text-gray-400 mr-2" />
-            <input 
-              type="text" 
-              value={libraryPath}
-              onChange={(e) => setLibraryPath(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && scanLibrary()}
-              className="bg-transparent text-xs text-white py-1 outline-none w-32 focus:w-48 transition-all"
-              placeholder="Library Path..."
-            />
+            <button className="bg-transparent text-xs text-white py-2 outline-none">
+              {libraryPath ? 'Change Library' : 'Select Library'}
+            </button>
           </div>
           <button 
             onClick={() => setShowSettings(true)}
@@ -178,9 +185,42 @@ export default function App() {
         </div>
       </nav>
 
-      {loading ? (
+      {!libraryPath ? (
+        <div className="flex-grow flex flex-col items-center justify-center text-center px-4 relative z-10 pt-20">
+          <div className="w-24 h-24 mb-6 rounded-full bg-accent/20 flex items-center justify-center">
+            <FolderSearch className="w-12 h-12 text-accent" />
+          </div>
+          <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4 drop-shadow-md">Welcome to NetflixLocal</h2>
+          <p className="text-lg text-gray-400 max-w-lg mb-10 drop-shadow-md">
+            Your personal, offline media player. To get started, select the folder where you store your movies and TV shows.
+          </p>
+          <button 
+            onClick={handleSelectFolder}
+            className="bg-accent hover:bg-accent/80 text-white px-8 py-4 rounded font-bold text-xl shadow-lg transition-all flex items-center gap-3 transform hover:scale-105"
+          >
+            <FolderSearch className="w-6 h-6" />
+            Select Media Folder
+          </button>
+        </div>
+      ) : loading ? (
         <div className="flex-grow flex items-center justify-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-accent border-solid shadow-lg"></div>
+        </div>
+      ) : files.length === 0 ? (
+        <div className="flex-grow flex flex-col items-center justify-center text-center px-4 relative z-10 pt-20">
+          <div className="w-24 h-24 mb-6 rounded-full bg-gray-800 flex items-center justify-center">
+            <Search className="w-10 h-10 text-gray-500" />
+          </div>
+          <h2 className="text-3xl font-bold mb-2">No videos found</h2>
+          <p className="text-gray-400 mb-8 max-w-md">
+            We couldn't find any supported video files (.mp4, .mkv, .avi, etc.) in the selected folder.
+          </p>
+          <button 
+            onClick={handleSelectFolder}
+            className="border border-white/20 hover:bg-white/10 text-white px-6 py-2 rounded font-semibold transition"
+          >
+            Choose a different folder
+          </button>
         </div>
       ) : (
         <>

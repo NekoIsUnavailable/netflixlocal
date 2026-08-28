@@ -51,6 +51,17 @@ app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
 });
 
+const { dialog } = require('electron');
+
+// IPC Handler to select folder natively
+ipcMain.handle('select-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  if (result.canceled) return null;
+  return result.filePaths[0];
+});
+
 // IPC Handler to scan directory
 ipcMain.handle('scan-directory', async (event, dirPath) => {
   try {
