@@ -2,6 +2,14 @@
 
 A fully offline, Netflix-style desktop media player for your local video collection. Built with Electron, React, Vite, and Tailwind CSS.
 
+## UI Showcase
+
+![Home Screen](screenshots/home.png)
+![Startup](screenshots/startup.png)
+![Profiles](screenshots/profiles.png)
+![Info Modal](screenshots/modal.png)
+![Settings](screenshots/settings.png)
+
 ## Features
 
 - **Netflix-Style UI**: Experience a familiar, premium interface with horizontal scrolling carousels, full-width hero banners (Ken Burns effect), and Jawlet hover cards.
