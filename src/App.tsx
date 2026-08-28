@@ -187,19 +187,36 @@ export default function App() {
 
       {!libraryPath ? (
         <div className="flex-grow flex flex-col items-center justify-center text-center px-4 relative z-10 pt-20">
-          <div className="w-24 h-24 mb-6 rounded-full bg-accent/20 flex items-center justify-center">
-            <FolderSearch className="w-12 h-12 text-accent" />
-          </div>
-          <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4 drop-shadow-md">Welcome to NetflixLocal</h2>
-          <p className="text-lg text-gray-400 max-w-lg mb-10 drop-shadow-md">
-            Your personal, offline media player. To get started, select the folder where you store your movies and TV shows.
+          <h2 className="text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-md text-white">
+            The Ultimate Local Media Engine.
+          </h2>
+          <p className="text-xl text-gray-400 max-w-2xl mb-12 drop-shadow-md">
+            100% offline. Zero tracking. Just you and your media.<br/>
+            Auto-play next episode, smart metadata, external player handoffs, and more.<br/>
+            All dressed up in a gorgeous cinematic interface.
           </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12 max-w-4xl w-full text-left">
+            <div className="bg-black/50 p-6 rounded-lg border border-white/10 shadow-xl">
+              <h3 className="text-xl font-bold mb-2 text-white flex items-center gap-2">🎬 External Players</h3>
+              <p className="text-gray-400 text-sm">Got heavy 4K HDR x265 files? Instantly hand off playback to PotPlayer or VLC with zero stuttering.</p>
+            </div>
+            <div className="bg-black/50 p-6 rounded-lg border border-white/10 shadow-xl">
+              <h3 className="text-xl font-bold mb-2 text-white flex items-center gap-2">⏭️ The Binge Engine</h3>
+              <p className="text-gray-400 text-sm">Automatically queues up the next episode and remembers exactly where you left off. Just like the big guys.</p>
+            </div>
+            <div className="bg-black/50 p-6 rounded-lg border border-white/10 shadow-xl">
+              <h3 className="text-xl font-bold mb-2 text-white flex items-center gap-2">🕵️‍♂️ Smart Clean-up</h3>
+              <p className="text-gray-400 text-sm">Automatically cleans messy release names, fetches high-res artwork, and generates instant hover teasers.</p>
+            </div>
+          </div>
+
           <button 
             onClick={handleSelectFolder}
-            className="bg-accent hover:bg-accent/80 text-white px-8 py-4 rounded font-bold text-xl shadow-lg transition-all flex items-center gap-3 transform hover:scale-105"
+            className="bg-accent hover:bg-accent/80 text-white px-10 py-5 rounded font-bold text-2xl shadow-lg transition-all flex items-center gap-3 transform hover:scale-105"
           >
-            <FolderSearch className="w-6 h-6" />
-            Select Media Folder
+            <FolderSearch className="w-8 h-8" />
+            Select Your Media Folder
           </button>
         </div>
       ) : loading ? (
