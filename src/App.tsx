@@ -22,6 +22,8 @@ export default function App() {
     overlayOpacity: 0.5,
     appName: 'NETFLIX',
     uiScale: 1.0,
+    useExternalPlayer: false,
+    externalPlayerPath: '',
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -83,6 +85,14 @@ export default function App() {
     
     setFiles(enrichedFiles);
     setLoading(false);
+  };
+
+  const handlePlayVideo = (video: LocalFile) => {
+    if (settings.useExternalPlayer && settings.externalPlayerPath && window.electronAPI && window.electronAPI.playInExternalPlayer) {
+      window.electronAPI.playInExternalPlayer(settings.externalPlayerPath, video.path);
+    } else {
+      setPlayingVideo(video);
+    }
   };
 
   const handleSelectFolder = async () => {
@@ -270,7 +280,7 @@ export default function App() {
                 </p>
                 <div className="flex gap-4">
                   <button 
-                    onClick={() => setPlayingVideo(featured)}
+                    onClick={() => handlePlayVideo(featured)}
                     className="flex items-center gap-2 bg-white text-black px-8 py-3 rounded text-xl font-bold hover:bg-white/80 transition"
                   >
                     <Play className="w-7 h-7 fill-black" /> Play
@@ -288,12 +298,12 @@ export default function App() {
 
           {/* Carousel Rows */}
           <div className="px-2 -mt-32 relative z-10 flex-grow pb-20">
-            <ContentRow title="Home" videos={files} onPlay={setPlayingVideo} onInfo={setInfoVideo} />
+            <ContentRow title="Home" videos={files} onPlay={handlePlayVideo} onInfo={setInfoVideo} />
             {shows.length > 0 && (
-              <ContentRow title="TV Shows" videos={shows} onPlay={setPlayingVideo} onInfo={setInfoVideo} />
+              <ContentRow title="TV Shows" videos={shows} onPlay={handlePlayVideo} onInfo={setInfoVideo} />
             )}
             {movies.length > 0 && (
-              <ContentRow title="Movies" videos={movies} onPlay={setPlayingVideo} onInfo={setInfoVideo} />
+              <ContentRow title="Movies" videos={movies} onPlay={handlePlayVideo} onInfo={setInfoVideo} />
             )}
           </div>
         </>
@@ -301,7 +311,7 @@ export default function App() {
 
       {/* Detail Modal */}
       {infoVideo && (
-        <DetailModal video={infoVideo} onClose={() => setInfoVideo(null)} onPlay={(v) => { setInfoVideo(null); setPlayingVideo(v); }} />
+        <DetailModal video={infoVideo} onClose={() => setInfoVideo(null)} onPlay={(v) => { setInfoVideo(null); handlePlayVideo(v); }} />
       )}
 
       {/* Video Player Modal */}

@@ -92,3 +92,32 @@ ipcMain.handle('scan-directory', async (event, dirPath) => {
     return [];
   }
 });
+
+ipcMain.handle('select-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'Executables', extensions: ['exe'] }]
+  });
+  if (result.canceled) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('play-in-external-player', async (event, playerPath, videoPath) => {
+  const { execFile } = require('child_process');
+  
+  // Custom arguments for VLC and PotPlayer to make them borderless/fullscreen
+  let args = [videoPath];
+  const playerLower = playerPath.toLowerCase();
+  
+  if (playerLower.includes('vlc.exe')) {
+    args.push('--fullscreen', '--no-video-title-show', '--play-and-exit');
+  } else if (playerLower.includes('potplayer')) {
+    args.push('/fullscreen', '/close');
+  }
+
+  execFile(playerPath, args, (error) => {
+    if (error) {
+      console.error('Failed to launch external player:', error);
+    }
+  });
+});

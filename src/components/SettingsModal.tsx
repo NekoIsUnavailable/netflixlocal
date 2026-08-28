@@ -7,6 +7,8 @@ interface Settings {
   overlayOpacity: number;
   appName: string;
   uiScale: number;
+  useExternalPlayer: boolean;
+  externalPlayerPath: string;
 }
 
 export function SettingsModal({ onClose, onSave, currentSettings }: { 
@@ -115,8 +117,51 @@ export function SettingsModal({ onClose, onSave, currentSettings }: {
             />
           </div>
 
+          {/* External Player */}
+          <div className="border-t border-gray-700 pt-6">
+            <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2">
+              🎬 External Player (Advanced)
+            </h3>
+            <div className="flex items-center gap-3 mb-4">
+              <input 
+                type="checkbox"
+                id="useExternalPlayer"
+                checked={settings.useExternalPlayer}
+                onChange={(e) => setSettings({ ...settings, useExternalPlayer: e.target.checked })}
+                className="w-5 h-5 accent-accent"
+              />
+              <label htmlFor="useExternalPlayer" className="text-sm font-semibold text-gray-300 cursor-pointer">
+                Play videos in external player (PotPlayer, VLC)
+              </label>
+            </div>
+            
+            {settings.useExternalPlayer && (
+              <div className="ml-8 space-y-2">
+                <label className="block text-xs font-semibold text-gray-400">Path to Player Executable (.exe)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    value={settings.externalPlayerPath}
+                    onChange={(e) => setSettings({ ...settings, externalPlayerPath: e.target.value })}
+                    className="bg-black/50 border border-gray-700 rounded px-3 py-2 text-sm text-white outline-none flex-grow focus:border-accent"
+                    placeholder="C:\Program Files\DAUM\PotPlayer\PotPlayer64.exe"
+                  />
+                  <button 
+                    onClick={async () => {
+                      const path = await window.electronAPI.selectFile();
+                      if (path) setSettings({ ...settings, externalPlayerPath: path });
+                    }}
+                    className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-white text-sm font-bold transition"
+                  >
+                    Browse
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* UI Scale */}
-          <div>
+          <div className="border-t border-gray-700 pt-6">
             <label className="block text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
               <Maximize className="w-4 h-4" /> UI Scale: {Math.round(settings.uiScale * 100)}%
             </label>
