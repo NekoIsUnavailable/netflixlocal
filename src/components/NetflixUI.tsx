@@ -6,10 +6,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 export interface LocalFile {
   name: string;
   path: string;
-  meta?: { title?: string; description?: string; poster?: string };
+  meta?: { title?: string; description?: string; poster?: string; year?: string; genre?: string; };
   thumbnail?: string;
   duration?: number;
   dateModified?: number;
+  localPoster?: string | null;
+  localFanart?: string | null;
+  localNfoContent?: string | null;
+  folderName?: string;
 }
 
 // --- Detail Modal ---
@@ -92,7 +96,7 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
 }
 
 // --- Video Card (Hover Jawlet) ---
-export function VideoCard({ video, onPlay, onInfo }: { video: LocalFile, onPlay: (v: LocalFile) => void, onInfo: (v: LocalFile) => void }) {
+export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFile, onPlay: (v: LocalFile) => void, onInfo: (v: LocalFile) => void, progress?: number }) {
   const [isHovered, setIsHovered] = useState(false);
   const hoverTimeoutRef = useRef<number | null>(null);
 
@@ -109,7 +113,7 @@ export function VideoCard({ video, onPlay, onInfo }: { video: LocalFile, onPlay:
 
   return (
     <div 
-      className="relative flex-none w-64 aspect-video rounded-md cursor-pointer transition-transform duration-300"
+      className="relative flex-none w-64 aspect-video rounded-md cursor-pointer transition-transform duration-300 hover:z-50"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={() => {
@@ -128,6 +132,12 @@ export function VideoCard({ video, onPlay, onInfo }: { video: LocalFile, onPlay:
         <div className="absolute bottom-2 left-2 right-2 text-xs font-bold text-white truncate drop-shadow-md shadow-black">
           {video.meta?.title || video.name}
         </div>
+        {/* Progress Bar */}
+        {progress !== undefined && progress > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-600">
+            <div className="h-full bg-red-600" style={{ width: `${progress * 100}%` }} />
+          </div>
+        )}
       </div>
 
       {/* Expanded Hover Card (Jawlet) */}
@@ -138,14 +148,21 @@ export function VideoCard({ video, onPlay, onInfo }: { video: LocalFile, onPlay:
             animate={{ opacity: 1, scale: 1.3 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full bg-[#181818] rounded-md shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-50 overflow-hidden border border-gray-700/50"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[25%] w-full bg-[#181818] rounded-md shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[100] overflow-hidden border border-gray-700/50"
+            style={{ transformOrigin: 'bottom center' }}
           >
             <div className="w-full aspect-video relative cursor-pointer" onClick={(e) => { e.stopPropagation(); onPlay(video); }}>
-               {video.thumbnail ? (
-                <img src={video.thumbnail} alt={video.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-gray-800" />
-              )}
+              <video 
+                src={`file:///${video.path.replace(/\\/g, '/')}`} 
+                autoPlay 
+                muted 
+                loop 
+                className="w-full h-full object-cover"
+                onLoadedMetadata={(e) => {
+                  const v = e.target as HTMLVideoElement;
+                  if (video.duration) v.currentTime = Math.floor(video.duration / 2); // Start playing from the middle!
+                }}
+              />
               {/* Play Overlay */}
               <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition">
                 <Play className="w-10 h-10 text-white fill-white drop-shadow-lg" />
@@ -183,7 +200,7 @@ export function VideoCard({ video, onPlay, onInfo }: { video: LocalFile, onPlay:
 }
 
 // --- Content Row (Carousel) ---
-export function ContentRow({ title, videos, onPlay, onInfo }: { title: string, videos: LocalFile[], onPlay: (v: LocalFile) => void, onInfo: (v: LocalFile) => void }) {
+export function ContentRow({ title, videos, onPlay, onInfo, progresses = {}, isTop10 = false }: { title: string, videos: LocalFile[], onPlay: (v: LocalFile) => void, onInfo: (v: LocalFile) => void, progresses?: Record<string, number>, isTop10?: boolean }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
@@ -213,7 +230,7 @@ export function ContentRow({ title, videos, onPlay, onInfo }: { title: string, v
   if (videos.length === 0) return null;
 
   return (
-    <div className="mb-8 relative group z-20">
+    <div className="mb-8 relative group z-20 hover:z-50">
       <h2 className="text-xl md:text-2xl font-bold text-gray-200 mb-2 px-10 hover:text-white transition cursor-pointer flex items-center gap-2">
         {title}
         <ChevronRight className="w-5 h-5 text-transparent group-hover:text-white transition-all translate-x-[-10px] group-hover:translate-x-0" />
@@ -222,7 +239,7 @@ export function ContentRow({ title, videos, onPlay, onInfo }: { title: string, v
       {/* Left Arrow */}
       {showLeftArrow && (
         <div 
-          className="absolute left-0 top-9 bottom-10 w-10 md:w-12 bg-black/50 z-40 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition hover:bg-black/80 rounded-r-md"
+          className="absolute left-0 top-[10%] bottom-[10%] w-10 md:w-12 bg-black/50 z-40 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition hover:bg-black/80 rounded-r-md"
           onClick={() => scroll('left')}
         >
           <ChevronLeft className="w-8 h-8 text-white hover:scale-125 transition-transform" />
@@ -232,7 +249,7 @@ export function ContentRow({ title, videos, onPlay, onInfo }: { title: string, v
       {/* Right Arrow */}
       {showRightArrow && (
         <div 
-          className="absolute right-0 top-9 bottom-10 w-10 md:w-12 bg-black/50 z-40 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition hover:bg-black/80 rounded-l-md"
+          className="absolute right-0 top-[10%] bottom-[10%] w-10 md:w-12 bg-black/50 z-40 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition hover:bg-black/80 rounded-l-md"
           onClick={() => scroll('right')}
         >
           <ChevronRight className="w-8 h-8 text-white hover:scale-125 transition-transform" />
@@ -242,10 +259,19 @@ export function ContentRow({ title, videos, onPlay, onInfo }: { title: string, v
       <div 
         ref={rowRef}
         onScroll={handleScroll}
-        className="flex gap-2 overflow-x-auto overflow-y-visible px-10 pb-10 pt-2 hide-scrollbar scroll-smooth"
+        className="flex gap-2 overflow-x-auto overflow-y-hidden px-10 py-32 -my-28 hide-scrollbar scroll-smooth"
       >
         {videos.map((video, i) => (
-          <VideoCard key={`${video.path}-${i}`} video={video} onPlay={onPlay} onInfo={onInfo} />
+          <div key={`${video.path}-${i}`} className="flex items-end hover:z-50 relative">
+            {isTop10 && (
+              <svg viewBox="0 0 100 100" className="h-full w-auto max-h-[150px] -mr-6 z-10 fill-black stroke-gray-600 drop-shadow-[4px_0_10px_rgba(0,0,0,0.8)] stroke-[2px]">
+                <text x="50" y="95" fontSize="100" fontWeight="900" textAnchor="middle">{i + 1}</text>
+              </svg>
+            )}
+            <div className={isTop10 ? "z-20" : ""}>
+              <VideoCard video={video} onPlay={onPlay} onInfo={onInfo} progress={progresses[video.path] !== undefined && video.duration ? progresses[video.path] / video.duration : 0} />
+            </div>
+          </div>
         ))}
       </div>
     </div>

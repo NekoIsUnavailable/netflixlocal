@@ -68,13 +68,29 @@ ipcMain.handle('scan-directory', async (event, dirPath) => {
     const fullPath = path.resolve(dirPath);
     if (!fs.existsSync(fullPath)) return [];
     
-    const files = fs.readdirSync(fullPath);
-    const mediaFiles = files.filter(file => {
-      const ext = path.extname(file).toLowerCase();
+    const walkSync = (dir, filelist = []) => {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        const filepath = path.join(dir, file);
+        if (fs.statSync(filepath).isDirectory()) {
+          filelist = walkSync(filepath, filelist);
+        } else {
+          filelist.push(filepath);
+        }
+      }
+      return filelist;
+    };
+
+    const allFiles = walkSync(fullPath);
+    
+    const mediaFiles = allFiles.filter(filepath => {
+      const ext = path.extname(filepath).toLowerCase();
       return ['.mp4', '.mkv', '.avi', '.mov', '.webm'].includes(ext);
     });
     
-    return mediaFiles.map(file => {
+    return mediaFiles.map(filepath => {
+      const file = path.basename(filepath);
+      const dir = path.dirname(filepath);
       // Clean up pirate group tags like [AnimePahe], remove extension, and replace underscores with spaces
       let cleanName = file.replace(/\[.*?\]/g, '').trim(); // Remove brackets
       cleanName = path.basename(cleanName, path.extname(cleanName)); // Remove extension
@@ -82,9 +98,30 @@ ipcMain.handle('scan-directory', async (event, dirPath) => {
       // Sometimes it leaves leading hyphens like "- 01 1080p"
       cleanName = cleanName.replace(/^[-\s]+/, '');
       
+      // Check for offline metadata/artwork
+      const baseNoExt = path.basename(file, path.extname(file));
+      const posterPath = path.join(dir, 'poster.jpg');
+      const fanartPath = path.join(dir, 'fanart.jpg');
+      const nfoPath = path.join(dir, `${baseNoExt}.nfo`);
+      const movieNfoPath = path.join(dir, 'movie.nfo');
+      
+      const localPoster = fs.existsSync(posterPath) ? `file:///${posterPath.replace(/\\/g, '/')}` : null;
+      const localFanart = fs.existsSync(fanartPath) ? `file:///${fanartPath.replace(/\\/g, '/')}` : null;
+      
+      let localNfoContent = null;
+      if (fs.existsSync(nfoPath)) {
+        localNfoContent = fs.readFileSync(nfoPath, 'utf8');
+      } else if (fs.existsSync(movieNfoPath)) {
+        localNfoContent = fs.readFileSync(movieNfoPath, 'utf8');
+      }
+      
       return {
         name: cleanName || file, // Fallback to raw file if regex wipes it completely
-        path: path.join(fullPath, file)
+        path: filepath,
+        folderName: dir !== fullPath ? path.basename(dir) : undefined,
+        localPoster,
+        localFanart,
+        localNfoContent
       };
     });
   } catch (error) {

@@ -1,0 +1,1 @@
+const Jimp = require('jimp'); Jimp.read('build/icon.jpg').then(img => { img.resize(256, 256).write('build/icon.png'); img.resize(256, 256).write('build/icon.ico'); img.resize(256, 256).write('public/vite.svg'); console.log('Done'); });  

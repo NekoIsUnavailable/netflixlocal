@@ -1,4 +1,4 @@
-export async function generateVideoThumbnail(videoPath: string): Promise<{ thumbnail: string | null, duration: number }> {
+export async function generateVideoThumbnail(videoPath: string, skipThumbnail: boolean = false): Promise<{ thumbnail: string | null, duration: number }> {
   return new Promise((resolve) => {
     const video = document.createElement('video');
     video.style.display = 'none';
@@ -13,8 +13,16 @@ export async function generateVideoThumbnail(videoPath: string): Promise<{ thumb
     video.onloadedmetadata = () => {
       if (video.duration) {
         duration = video.duration;
+        if (skipThumbnail) {
+          resolve({ thumbnail: null, duration });
+          return;
+        }
         video.currentTime = Math.min(5, video.duration * 0.1);
       } else {
+        if (skipThumbnail) {
+          resolve({ thumbnail: null, duration: 0 });
+          return;
+        }
         video.currentTime = 0;
       }
     };
