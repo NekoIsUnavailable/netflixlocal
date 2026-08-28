@@ -175,7 +175,18 @@ export function SettingsModal({ onClose, onSave, currentSettings }: {
           </div>
         </div>
 
-        <div className="mt-8 flex justify-end">
+        <div className="mt-8 flex justify-between items-center">
+          <button
+            onClick={() => {
+              if (confirm("Are you sure you want to completely reset all settings and library data? The app will reload.")) {
+                localStorage.clear();
+                window.location.reload();
+              }
+            }}
+            className="text-red-500 text-sm hover:underline font-semibold"
+          >
+            Reset App Data
+          </button>
           <button 
             onClick={handleSave}
             className="flex items-center gap-2 bg-accent text-white font-bold py-2 px-6 rounded hover:opacity-80 transition"
