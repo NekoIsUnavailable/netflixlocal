@@ -19,7 +19,15 @@
       "output": "release"
     },
     "win": {
-      "target": "portable"
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NetflixLocal"
     },
     "files": [
       "dist/**/*",
