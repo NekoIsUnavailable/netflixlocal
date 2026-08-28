@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: var(--theme-accent, #E50914);
+  --color-netflix-black: #141414;
+  --color-netflix-dark: #181818;
+  --color-netflix-light: #e5e5e5;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-netflix-black);
+    background-image: var(--theme-wallpaper, none);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--color-netflix-light);
+    overflow-x: hidden;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+}
+
+/* Pseudo-element for dark overlay on top of wallpaper */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 20, var(--theme-overlay-opacity, 0));
+  z-index: -1;
+  pointer-events: none;
+}
