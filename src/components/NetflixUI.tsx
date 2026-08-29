@@ -153,7 +153,7 @@ export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFil
           >
             <div className="w-full aspect-video relative cursor-pointer" onClick={(e) => { e.stopPropagation(); onPlay(video); }}>
               <video 
-                src={`file:///${video.path.replace(/\\/g, '/')}`} 
+                src={`local://${encodeURIComponent(video.path)}`} 
                 autoPlay 
                 muted 
                 loop 

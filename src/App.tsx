@@ -9,36 +9,104 @@ import type { LocalFile } from './components/NetflixUI';
 import { StartupScreen } from './components/StartupScreen';
 import { ProfilesScreen } from './components/ProfilesScreen';
 
+type AppSettings = {
+  accentColor: string;
+  wallpaperPath: string;
+  overlayOpacity: number;
+  appName: string;
+  uiScale: number;
+  useExternalPlayer: boolean;
+  externalPlayerPath: string;
+  allowOnlineMetadata: boolean;
+};
+
+type IndexedLocalFile = LocalFile & {
+  size: number;
+  mtimeMs: number;
+};
+
+const DEFAULT_SETTINGS: AppSettings = {
+  accentColor: '#E50914',
+  wallpaperPath: '',
+  overlayOpacity: 0.5,
+  appName: 'NetflixLocal',
+  uiScale: 1.0,
+  useExternalPlayer: false,
+  externalPlayerPath: '',
+  allowOnlineMetadata: false,
+};
+
+const getLibraryCacheKey = (libraryPath: string) => `netflix_media_index_${encodeURIComponent(libraryPath)}`;
+const toLocalUri = (targetPath: string) => `local://${encodeURIComponent(targetPath)}`;
+
+const parseNfoMeta = (nfoContent: string, fallbackTitle: string) => {
+  const titleMatch = nfoContent.match(/<title>(.*?)<\/title>/i);
+  const plotMatch = nfoContent.match(/<plot>(.*?)<\/plot>/i);
+  const yearMatch = nfoContent.match(/<year>(.*?)<\/year>/i);
+  const genreMatch = nfoContent.match(/<genre>(.*?)<\/genre>/i);
+  return {
+    title: titleMatch?.[1] || fallbackTitle,
+    description: plotMatch?.[1] || 'A video file from your local library.',
+    poster: null,
+    year: yearMatch?.[1] || '',
+    genre: genreMatch?.[1] || 'Local Media',
+  };
+};
+
+const runWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>
+) => {
+  if (items.length === 0) return [];
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= items.length) break;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+};
+
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
   const [libraryPath, setLibraryPath] = useState(localStorage.getItem('netflix_library') || '');
-  const [files, setFiles] = useState<LocalFile[]>([]);
+  const [files, setFiles] = useState<IndexedLocalFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<LocalFile | null>(null);
   const [infoVideo, setInfoVideo] = useState<LocalFile | null>(null);
   const [showStartup, setShowStartup] = useState(true);
+  const [scanStatus, setScanStatus] = useState({
+    scannedCount: 0,
+    mediaCount: 0,
+    done: true,
+    hitScanLimit: false,
+    error: false,
+    enrichedCount: 0,
+    toEnrichCount: 0,
+  });
   
   // Settings State
   const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState({
-    accentColor: '#E50914',
-    wallpaperPath: '',
-    overlayOpacity: 0.5,
-    appName: 'Poopyflix',
-    uiScale: 1.0,
-    useExternalPlayer: false,
-    externalPlayerPath: '',
-  });
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [showNextOverlay, setShowNextOverlay] = useState(false);
   const [progresses, setProgresses] = useState<Record<string, number>>({});
+  const scanRunIdRef = useRef(0);
+  const progressBufferRef = useRef<Record<string, number>>({});
+  const progressSaveTimeoutRef = useRef<number | null>(null);
 
   // Load Settings and Progress
   useEffect(() => {
     const saved = localStorage.getItem('netflix_settings');
     if (saved) {
-      setSettings(JSON.parse(saved));
+      setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
     }
   }, []);
 
@@ -46,9 +114,12 @@ export default function App() {
     if (activeProfile) {
       const savedProg = localStorage.getItem(`netflix_progress_${activeProfile}`);
       if (savedProg) {
-        setProgresses(JSON.parse(savedProg));
+        const parsed = JSON.parse(savedProg);
+        setProgresses(parsed);
+        progressBufferRef.current = parsed;
       } else {
         setProgresses({});
+        progressBufferRef.current = {};
       }
     }
   }, [activeProfile]);
@@ -59,7 +130,7 @@ export default function App() {
     document.documentElement.style.setProperty('--theme-overlay-opacity', settings.overlayOpacity.toString());
     
     if (settings.wallpaperPath) {
-      const formattedPath = `file:///${settings.wallpaperPath.replace(/\\/g, '/')}`;
+      const formattedPath = toLocalUri(settings.wallpaperPath);
       document.documentElement.style.setProperty('--theme-wallpaper', `url('${formattedPath}')`);
     } else {
       document.documentElement.style.removeProperty('--theme-wallpaper');
@@ -68,60 +139,141 @@ export default function App() {
     localStorage.setItem('netflix_settings', JSON.stringify(settings));
   }, [settings]);
 
+  useEffect(() => {
+    if (!window.electronAPI?.onScanProgress || !window.electronAPI?.offScanProgress) return;
+    const handler = window.electronAPI.onScanProgress((payload) => {
+      setScanStatus((prev) => ({
+        ...prev,
+        scannedCount: payload.scannedCount ?? prev.scannedCount,
+        mediaCount: payload.mediaCount ?? prev.mediaCount,
+        done: payload.done ?? prev.done,
+        hitScanLimit: payload.hitScanLimit ?? prev.hitScanLimit,
+        error: payload.error ?? false,
+      }));
+    });
+    return () => {
+      window.electronAPI.offScanProgress(handler);
+    };
+  }, []);
+
+  const flushProgress = () => {
+    if (!activeProfile) return;
+    localStorage.setItem(`netflix_progress_${activeProfile}`, JSON.stringify(progressBufferRef.current));
+  };
+
+  const scheduleProgressFlush = () => {
+    if (progressSaveTimeoutRef.current) {
+      window.clearTimeout(progressSaveTimeoutRef.current);
+    }
+    progressSaveTimeoutRef.current = window.setTimeout(() => {
+      flushProgress();
+      progressSaveTimeoutRef.current = null;
+    }, 900);
+  };
+
+  const cancelScan = () => {
+    scanRunIdRef.current += 1;
+    setLoading(false);
+    setScanStatus((prev) => ({ ...prev, done: true }));
+  };
+
   const scanLibrary = async () => {
     if (!window.electronAPI) {
       alert("Run this inside Electron!");
       return;
     }
+    const runId = ++scanRunIdRef.current;
     setLoading(true);
-    const result = await window.electronAPI.scanDirectory(libraryPath);
-    
-    // Fetch metadata & thumbnails concurrently
-    const enrichedFiles = await Promise.all(
-      result.map(async (file: any) => {
-        let meta: { title: string; description: string; poster: string | null; year: string; genre: string } = { title: file.name, description: 'A video file from your local library.', poster: null, year: '', genre: '' };
-        
-        // 1. Try Offline NFO
-        if (file.localNfoContent) {
-          const titleMatch = file.localNfoContent.match(/<title>(.*?)<\/title>/i);
-          const plotMatch = file.localNfoContent.match(/<plot>(.*?)<\/plot>/i);
-          const yearMatch = file.localNfoContent.match(/<year>(.*?)<\/year>/i);
-          if (titleMatch) meta.title = titleMatch[1];
-          if (plotMatch) meta.description = plotMatch[1];
-          if (yearMatch) meta.year = yearMatch[1];
-        } else {
-          // 2. Try Online Metadata if no NFO
-          meta = await fetchMetadata(file.name);
-        }
-        
-        // Artwork Priority: localPoster > localFanart > online poster > generated thumbnail
-        let thumbnail = file.localFanart || file.localPoster || meta.poster;
-        let duration = 0;
-        
-        // Only generate ffmpeg thumbnail if we have absolutely no artwork
-        let skipThumbnail = false;
-        if (file.localPoster || file.localFanart) {
-          skipThumbnail = true;
-        }
-        
-        const generated = await generateVideoThumbnail(file.path, skipThumbnail);
-        if (generated) {
-          duration = generated.duration;
-          if (!thumbnail && !skipThumbnail) thumbnail = generated.thumbnail;
-        }
+    setScanStatus({
+      scannedCount: 0,
+      mediaCount: 0,
+      done: false,
+      hitScanLimit: false,
+      error: false,
+      enrichedCount: 0,
+      toEnrichCount: 0,
+    });
 
-        return {
-          ...file,
-          meta,
-          thumbnail,
-          duration,
-          dateModified: Date.now()
-        };
-      })
-    );
-    
-    setFiles(enrichedFiles);
+    const result = await window.electronAPI.scanDirectory(libraryPath);
+    if (runId !== scanRunIdRef.current) return;
+
+    const cacheKey = getLibraryCacheKey(libraryPath);
+    const cachedRaw = localStorage.getItem(cacheKey);
+    let cachedFiles: IndexedLocalFile[] = [];
+    if (cachedRaw) {
+      try {
+        cachedFiles = JSON.parse(cachedRaw);
+      } catch {
+        localStorage.removeItem(cacheKey);
+      }
+    }
+    const cacheByPath = new Map(cachedFiles.map((f) => [f.path, f]));
+
+    const unchanged: IndexedLocalFile[] = [];
+    const toEnrich: typeof result = [];
+
+    result.forEach((file) => {
+      const cached = cacheByPath.get(file.path);
+      if (cached && cached.size === file.size && cached.mtimeMs === file.mtimeMs) {
+        unchanged.push({
+          ...cached,
+          localPoster: file.localPoster,
+          localFanart: file.localFanart,
+          localNfoContent: file.localNfoContent,
+          folderName: file.folderName,
+        });
+      } else {
+        toEnrich.push(file);
+      }
+    });
+
+    setScanStatus((prev) => ({ ...prev, toEnrichCount: toEnrich.length }));
+
+    const enriched = await runWithConcurrency(toEnrich, 4, async (file, index) => {
+      if (runId !== scanRunIdRef.current) return null;
+
+      let meta = {
+        title: file.name,
+        description: 'A video file from your local library.',
+        poster: null as string | null,
+        year: '',
+        genre: 'Local Media',
+      };
+
+      if (file.localNfoContent) {
+        meta = parseNfoMeta(file.localNfoContent, file.name);
+      } else if (settings.allowOnlineMetadata) {
+        meta = await fetchMetadata(file.name);
+      }
+
+      let thumbnail = file.localFanart || file.localPoster || meta.poster;
+      const skipThumbnail = Boolean(file.localPoster || file.localFanart);
+      const generated = await generateVideoThumbnail(file.path, skipThumbnail);
+      const duration = generated?.duration || 0;
+      if (!thumbnail && !skipThumbnail) {
+        thumbnail = generated?.thumbnail || null;
+      }
+
+      setScanStatus((prev) => ({ ...prev, enrichedCount: index + 1 }));
+
+      return {
+        ...file,
+        meta,
+        thumbnail,
+        duration,
+        dateModified: Date.now(),
+      } as IndexedLocalFile;
+    });
+
+    if (runId !== scanRunIdRef.current) return;
+
+    const merged = [...unchanged, ...enriched.filter((item): item is IndexedLocalFile => Boolean(item))]
+      .sort((a, b) => a.path.localeCompare(b.path));
+
+    setFiles(merged);
+    localStorage.setItem(cacheKey, JSON.stringify(merged));
     setLoading(false);
+    setScanStatus((prev) => ({ ...prev, done: true }));
   };
 
   const handlePlayVideo = (video: LocalFile) => {
@@ -143,6 +295,7 @@ export default function App() {
     if (window.electronAPI && window.electronAPI.selectFolder) {
       const folder = await window.electronAPI.selectFolder();
       if (folder) {
+        cancelScan();
         setLibraryPath(folder);
         localStorage.setItem('netflix_library', folder);
       }
@@ -151,20 +304,31 @@ export default function App() {
 
   useEffect(() => {
     if (libraryPath) {
+      const cachedRaw = localStorage.getItem(getLibraryCacheKey(libraryPath));
+      if (cachedRaw) {
+        try {
+          setFiles(JSON.parse(cachedRaw));
+        } catch {
+          localStorage.removeItem(getLibraryCacheKey(libraryPath));
+        }
+      }
       scanLibrary();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryPath]);
 
   // Video Player Progress Tracking
   const handleTimeUpdate = () => {
     if (videoRef.current && playingVideo && activeProfile) {
       const { currentTime, duration } = videoRef.current;
-      
-      // Save progress to local storage
-      const progress = JSON.parse(localStorage.getItem(`netflix_progress_${activeProfile}`) || '{}');
-      progress[playingVideo.path] = currentTime;
-      localStorage.setItem(`netflix_progress_${activeProfile}`, JSON.stringify(progress));
+
+      const progress = {
+        ...progressBufferRef.current,
+        [playingVideo.path]: currentTime,
+      };
+      progressBufferRef.current = progress;
       setProgresses(progress);
+      scheduleProgressFlush();
 
       // Show Next Overlay if in last 15 seconds
       if (duration - currentTime <= 15 && duration > 0) {
@@ -177,29 +341,64 @@ export default function App() {
 
   const handleVideoLoaded = () => {
     if (videoRef.current && playingVideo && activeProfile) {
-      const progress = JSON.parse(localStorage.getItem(`netflix_progress_${activeProfile}`) || '{}');
+      const progress = progressBufferRef.current;
       if (progress[playingVideo.path]) {
         videoRef.current.currentTime = progress[playingVideo.path];
       }
     }
   };
 
-  const getNextEpisode = (currentVideo: LocalFile | null) => {
-    if (!currentVideo) return null;
-    const match = currentVideo.name.match(/(.*?)(s\d+e)(\d+)/i);
-    if (!match) return null;
+  const nextEpisodeByPath = useMemo(() => {
+    const grouped = new Map<string, { episode: number; file: IndexedLocalFile }[]>();
+    for (const file of files) {
+      const match = file.name.match(/(.*?)(s\d+e)(\d+)/i);
+      if (!match) continue;
+      const key = `${match[1].trim().toLowerCase()}-${match[2].toLowerCase()}`;
+      const episode = parseInt(match[3], 10);
+      if (!Number.isFinite(episode)) continue;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push({ episode, file });
+    }
 
-    const prefix = match[1];
-    const s_e = match[2];
-    const episodeNum = parseInt(match[3], 10);
-    
-    const nextEpStr = (episodeNum + 1).toString().padStart(match[3].length, '0');
-    // Escape prefix for regex
-    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const nextRegex = new RegExp(`^${escapedPrefix}${s_e}${nextEpStr}`, 'i');
-    
-    return files.find(f => nextRegex.test(f.name)) || null;
-  };
+    const lookup = new Map<string, IndexedLocalFile>();
+    for (const [, entries] of grouped) {
+      entries.sort((a, b) => a.episode - b.episode);
+      for (let i = 0; i < entries.length - 1; i += 1) {
+        lookup.set(entries[i].file.path, entries[i + 1].file);
+      }
+    }
+    return lookup;
+  }, [files]);
+
+  const nextEpisode = useMemo(
+    () => (playingVideo ? nextEpisodeByPath.get(playingVideo.path) || null : null),
+    [playingVideo, nextEpisodeByPath]
+  );
+
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      flushProgress();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [activeProfile]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showSettings) setShowSettings(false);
+        else if (infoVideo) setInfoVideo(null);
+        else if (playingVideo) {
+          flushProgress();
+          setPlayingVideo(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showSettings, infoVideo, playingVideo, activeProfile]);
 
   // Grouping for rows
   const { shows, movies, continueWatching, top10, collections } = useMemo(() => {
@@ -314,7 +513,9 @@ export default function App() {
                 onClick={() => setActiveProfile(null)}
                 className="p-1 hover:bg-white/10 rounded transition"
               >
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeProfile}`} className="w-8 h-8 rounded" alt="Profile" />
+                <div className="w-8 h-8 rounded bg-gray-700 text-white text-xs font-bold flex items-center justify-center">
+                  {(activeProfile || 'P').slice(0, 1).toUpperCase()}
+                </div>
               </button>
             </div>
           </nav>
@@ -330,8 +531,25 @@ export default function App() {
           </button>
         </div>
       ) : loading ? (
-        <div className="flex-grow flex items-center justify-center">
+        <div className="flex-grow flex flex-col items-center justify-center gap-4 text-center px-4">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-accent border-solid shadow-lg"></div>
+          <p className="text-sm text-gray-300">
+            Scanned {scanStatus.scannedCount.toLocaleString()} entries • Found {scanStatus.mediaCount.toLocaleString()} videos
+          </p>
+          {scanStatus.toEnrichCount > 0 && (
+            <p className="text-xs text-gray-400">
+              Enriched {Math.min(scanStatus.enrichedCount, scanStatus.toEnrichCount).toLocaleString()} / {scanStatus.toEnrichCount.toLocaleString()}
+            </p>
+          )}
+          <button
+            onClick={cancelScan}
+            className="border border-gray-500 text-gray-300 px-4 py-2 rounded hover:text-white hover:border-white transition"
+          >
+            Cancel Scan
+          </button>
+          {scanStatus.hitScanLimit && (
+            <p className="text-xs text-yellow-400">Scan limit reached; narrow your folder or rescan subfolders.</p>
+          )}
         </div>
       ) : files.length === 0 ? (
         <div className="flex-grow flex flex-col items-center justify-center text-center px-4 relative z-10 pt-20">
@@ -435,7 +653,10 @@ export default function App() {
             {/* Top Back Button (Fades out when controls hide natively) */}
             <div className="absolute top-0 left-0 w-full p-6 bg-gradient-to-b from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition duration-300 z-[301]">
               <button 
-                onClick={() => setPlayingVideo(null)}
+                onClick={() => {
+                  flushProgress();
+                  setPlayingVideo(null);
+                }}
                 className="flex items-center gap-2 text-white hover:text-gray-300"
               >
                 <ChevronLeft className="w-8 h-8" />
@@ -445,11 +666,13 @@ export default function App() {
             
             <video 
               ref={videoRef}
-              src={`file:///${playingVideo.path.replace(/\\/g, '/')}`} 
+              src={toLocalUri(playingVideo.path)}
               controls 
               autoPlay 
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleVideoLoaded}
+              onPause={flushProgress}
+              onEnded={flushProgress}
               className="w-full h-full outline-none"
             />
 
@@ -467,7 +690,7 @@ export default function App() {
 
             {/* Next Episode Binge Overlay */}
             <AnimatePresence>
-              {showNextOverlay && getNextEpisode(playingVideo) && (
+              {showNextOverlay && nextEpisode && (
                 <motion.div 
                   initial={{ opacity: 0, x: 50 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -475,14 +698,11 @@ export default function App() {
                   className="absolute bottom-24 right-10 bg-[#181818]/90 p-4 rounded shadow-2xl border border-gray-600/50 flex flex-col gap-2 z-[302] w-72"
                 >
                   <p className="text-gray-300 font-bold text-sm">Next episode in 15 seconds...</p>
-                  <div className="text-white font-bold truncate">{getNextEpisode(playingVideo)?.meta?.title || getNextEpisode(playingVideo)?.name}</div>
+                  <div className="text-white font-bold truncate">{nextEpisode.meta?.title || nextEpisode.name}</div>
                   <button 
                     onClick={() => {
-                      const next = getNextEpisode(playingVideo);
-                      if (next) {
-                        setShowNextOverlay(false);
-                        handlePlayVideo(next);
-                      }
+                      setShowNextOverlay(false);
+                      handlePlayVideo(nextEpisode);
                     }}
                     className="mt-2 flex items-center justify-center gap-2 bg-white text-black py-2 rounded font-bold hover:bg-gray-200 transition"
                   >

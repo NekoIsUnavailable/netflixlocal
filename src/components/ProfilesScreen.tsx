@@ -8,9 +8,21 @@ export interface Profile {
   avatar: string;
 }
 
+const createLocalAvatar = (name: string, color: string) => {
+  const safeName = (name || 'P').trim();
+  const initials = safeName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() || '')
+    .join('') || 'P';
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="12" fill="${color}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="48" font-family="Arial, sans-serif" font-weight="700">${initials}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
 export const DEFAULT_PROFILES: Profile[] = [
-  { id: '1', name: 'John', color: '#E50914', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John' },
-  { id: '2', name: 'Guest', color: '#0071eb', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest' }
+  { id: '1', name: 'John', color: '#E50914', avatar: createLocalAvatar('John', '#E50914') },
+  { id: '2', name: 'Guest', color: '#0071eb', avatar: createLocalAvatar('Guest', '#0071eb') }
 ];
 
 export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void }) {
@@ -62,7 +74,11 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
             <input 
               type="text" 
               value={editingProfile.name}
-              onChange={e => setEditingProfile({ ...editingProfile, name: e.target.value, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${e.target.value}` })}
+              onChange={e => setEditingProfile({
+                ...editingProfile,
+                name: e.target.value,
+                avatar: createLocalAvatar(e.target.value, editingProfile.color)
+              })}
               className='bg-gray-600 text-white px-4 py-2 text-xl font-semibold outline-none focus:ring-2 focus:ring-white rounded'
               placeholder="Name"
             />
@@ -71,7 +87,11 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
               <input 
                 type="color" 
                 value={editingProfile.color}
-                onChange={e => setEditingProfile({ ...editingProfile, color: e.target.value })}
+                onChange={e => setEditingProfile({
+                  ...editingProfile,
+                  color: e.target.value,
+                  avatar: createLocalAvatar(editingProfile.name, e.target.value)
+                })}
                 className='w-10 h-10 rounded cursor-pointer border-none bg-transparent'
               />
             </div>
@@ -137,11 +157,12 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
         <div 
           className='group flex flex-col items-center cursor-pointer'
           onClick={() => {
+            const color = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
             setEditingProfile({
               id: Date.now().toString(),
               name: 'New Profile',
-              color: '#' + Math.floor(Math.random()*16777215).toString(16),
-              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=New`
+              color,
+              avatar: createLocalAvatar('New Profile', color)
             });
           }}
         >
@@ -161,4 +182,3 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
     </div>
   );
 }
-
