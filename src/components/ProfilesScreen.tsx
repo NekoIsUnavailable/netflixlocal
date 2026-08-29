@@ -9,15 +9,9 @@ export interface Profile {
 }
 
 const createLocalAvatar = (name: string, color: string) => {
-  const safeName = (name || 'P').trim();
-  const initials = safeName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() || '')
-    .join('') || 'P';
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="12" fill="${color}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="48" font-family="Arial, sans-serif" font-weight="700">${initials}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  void name;
+  void color;
+  return '/icons.svg';
 };
 
 export const DEFAULT_PROFILES: Profile[] = [
@@ -68,7 +62,7 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
             className='w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 overflow-hidden border-4 border-transparent'
             style={{ backgroundColor: editingProfile.color }}
           >
-            <img src={editingProfile.avatar} alt={editingProfile.name} className='w-full h-full object-cover' />
+            <img src="/icons.svg" alt={editingProfile.name} className='w-full h-full object-cover' />
           </div>
           <div className='flex flex-col gap-4'>
             <input 
@@ -76,8 +70,7 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
               value={editingProfile.name}
               onChange={e => setEditingProfile({
                 ...editingProfile,
-                name: e.target.value,
-                avatar: createLocalAvatar(e.target.value, editingProfile.color)
+                name: e.target.value
               })}
               className='bg-gray-600 text-white px-4 py-2 text-xl font-semibold outline-none focus:ring-2 focus:ring-white rounded'
               placeholder="Name"
@@ -89,8 +82,7 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
                 value={editingProfile.color}
                 onChange={e => setEditingProfile({
                   ...editingProfile,
-                  color: e.target.value,
-                  avatar: createLocalAvatar(editingProfile.name, e.target.value)
+                  color: e.target.value
                 })}
                 className='w-10 h-10 rounded cursor-pointer border-none bg-transparent'
               />
@@ -143,7 +135,7 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
               className={`w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 border-4 ${editingMode ? 'border-transparent opacity-50' : 'border-transparent group-hover:border-white'} transition overflow-hidden relative`}
               style={{ backgroundColor: p.color }}
             >
-              <img src={p.avatar} alt={p.name} className='w-full h-full object-cover opacity-90 group-hover:opacity-100' />
+              <img src="/icons.svg" alt={p.name} className='w-full h-full object-cover opacity-90 group-hover:opacity-100' />
               {editingMode && (
                 <div className='absolute inset-0 flex items-center justify-center bg-black/50'>
                   <Edit2 className='w-10 h-10 text-white' />
