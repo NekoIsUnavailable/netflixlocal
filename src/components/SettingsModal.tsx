@@ -9,6 +9,7 @@ interface Settings {
   uiScale: number;
   useExternalPlayer: boolean;
   externalPlayerPath: string;
+  allowOnlineMetadata: boolean;
 }
 
 export function SettingsModal({ onClose, onSave, currentSettings }: { 
@@ -158,6 +159,25 @@ export function SettingsModal({ onClose, onSave, currentSettings }: {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Metadata Source */}
+          <div className="border-t border-gray-700 pt-6">
+            <div className="flex items-center gap-3 mb-2">
+              <input
+                type="checkbox"
+                id="allowOnlineMetadata"
+                checked={settings.allowOnlineMetadata}
+                onChange={(e) => setSettings({ ...settings, allowOnlineMetadata: e.target.checked })}
+                className="w-5 h-5 accent-accent"
+              />
+              <label htmlFor="allowOnlineMetadata" className="text-sm font-semibold text-gray-300 cursor-pointer">
+                Allow online metadata lookups
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">
+              Disable for strict offline mode and faster scanning.
+            </p>
           </div>
 
           {/* UI Scale */}

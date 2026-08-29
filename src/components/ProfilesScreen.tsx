@@ -8,9 +8,15 @@ export interface Profile {
   avatar: string;
 }
 
+const createLocalAvatar = (name: string, color: string) => {
+  void name;
+  void color;
+  return '/icons.svg';
+};
+
 export const DEFAULT_PROFILES: Profile[] = [
-  { id: '1', name: 'John', color: '#E50914', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John' },
-  { id: '2', name: 'Guest', color: '#0071eb', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest' }
+  { id: '1', name: 'John', color: '#E50914', avatar: createLocalAvatar('John', '#E50914') },
+  { id: '2', name: 'Guest', color: '#0071eb', avatar: createLocalAvatar('Guest', '#0071eb') }
 ];
 
 export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void }) {
@@ -56,13 +62,16 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
             className='w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 overflow-hidden border-4 border-transparent'
             style={{ backgroundColor: editingProfile.color }}
           >
-            <img src={editingProfile.avatar} alt={editingProfile.name} className='w-full h-full object-cover' />
+            <img src="/icons.svg" alt={editingProfile.name} className='w-full h-full object-cover' />
           </div>
           <div className='flex flex-col gap-4'>
             <input 
               type="text" 
               value={editingProfile.name}
-              onChange={e => setEditingProfile({ ...editingProfile, name: e.target.value, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${e.target.value}` })}
+              onChange={e => setEditingProfile({
+                ...editingProfile,
+                name: e.target.value
+              })}
               className='bg-gray-600 text-white px-4 py-2 text-xl font-semibold outline-none focus:ring-2 focus:ring-white rounded'
               placeholder="Name"
             />
@@ -71,7 +80,10 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
               <input 
                 type="color" 
                 value={editingProfile.color}
-                onChange={e => setEditingProfile({ ...editingProfile, color: e.target.value })}
+                onChange={e => setEditingProfile({
+                  ...editingProfile,
+                  color: e.target.value
+                })}
                 className='w-10 h-10 rounded cursor-pointer border-none bg-transparent'
               />
             </div>
@@ -123,7 +135,7 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
               className={`w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 border-4 ${editingMode ? 'border-transparent opacity-50' : 'border-transparent group-hover:border-white'} transition overflow-hidden relative`}
               style={{ backgroundColor: p.color }}
             >
-              <img src={p.avatar} alt={p.name} className='w-full h-full object-cover opacity-90 group-hover:opacity-100' />
+              <img src="/icons.svg" alt={p.name} className='w-full h-full object-cover opacity-90 group-hover:opacity-100' />
               {editingMode && (
                 <div className='absolute inset-0 flex items-center justify-center bg-black/50'>
                   <Edit2 className='w-10 h-10 text-white' />
@@ -137,11 +149,12 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
         <div 
           className='group flex flex-col items-center cursor-pointer'
           onClick={() => {
+            const color = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
             setEditingProfile({
               id: Date.now().toString(),
               name: 'New Profile',
-              color: '#' + Math.floor(Math.random()*16777215).toString(16),
-              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=New`
+              color,
+              avatar: createLocalAvatar('New Profile', color)
             });
           }}
         >
@@ -161,4 +174,3 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
     </div>
   );
 }
-

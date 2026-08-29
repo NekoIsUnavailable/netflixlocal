@@ -1,5 +1,5 @@
 {
-  "name": "poopyflix",
+  "name": "netflixlocal",
   "private": true,
   "version": "1.0.9",
   "type": "module",
@@ -13,10 +13,10 @@
     "package": "npm run build && electron-builder -w -c.mac.identity=null"
   },
   "build": {
-    "appId": "com.poopyflix.app",
-    "productName": "Poopyflix",
+    "appId": "com.netflixlocal.app",
+    "productName": "NetflixLocal",
     "directories": {
-      "output": "../release_poopyflix"
+      "output": "../release"
     },
     "win": {
       "target": "nsis",
@@ -28,7 +28,7 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Poopyflix"
+      "shortcutName": "NetflixLocal"
     },
     "files": [
       "dist/**/*",

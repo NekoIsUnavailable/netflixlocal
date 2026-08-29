@@ -3,8 +3,7 @@ export async function generateVideoThumbnail(videoPath: string, skipThumbnail: b
     const video = document.createElement('video');
     video.style.display = 'none';
     
-    // Convert local path to file URI properly for HTML video tag
-    video.src = `file:///${videoPath.replace(/\\/g, '/')}`;
+    video.src = `local://${encodeURIComponent(videoPath)}`;
     video.crossOrigin = 'anonymous';
 
     let duration = 0;

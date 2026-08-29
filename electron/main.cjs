@@ -3,6 +3,12 @@ const path = require('path');
 const fs = require('fs');
 
 const isDev = process.env.VITE_DEV === 'true';
+const SUPPORTED_MEDIA_EXTENSIONS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm']);
+const MAX_SCANNED_FILES = 50000;
+const PROGRESS_EMIT_INTERVAL = 250;
+const fsPromises = fs.promises;
+
+const toLocalUri = (absPath) => `local://${encodeURIComponent(absPath)}`;
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -17,7 +23,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false // allow loading local files
+      webSecurity: true
     }
   });
 
@@ -62,70 +68,136 @@ ipcMain.handle('select-folder', async () => {
   return result.filePaths[0];
 });
 
+const tryReadNfo = async (nfoPath) => {
+  try {
+    return await fsPromises.readFile(nfoPath, 'utf8');
+  } catch {
+    return null;
+  }
+};
+
 // IPC Handler to scan directory
 ipcMain.handle('scan-directory', async (event, dirPath) => {
   try {
-    const fullPath = path.resolve(dirPath);
-    if (!fs.existsSync(fullPath)) return [];
-    
-    const walkSync = (dir, filelist = []) => {
-      const files = fs.readdirSync(dir);
-      for (const file of files) {
-        const filepath = path.join(dir, file);
-        if (fs.statSync(filepath).isDirectory()) {
-          filelist = walkSync(filepath, filelist);
-        } else {
-          filelist.push(filepath);
-        }
-      }
-      return filelist;
+    if (typeof dirPath !== 'string' || !dirPath.trim()) return [];
+
+    const fullPath = await fsPromises.realpath(path.resolve(dirPath));
+    const rootStat = await fsPromises.stat(fullPath);
+    if (!rootStat.isDirectory()) return [];
+
+    let scannedCount = 0;
+    let mediaCount = 0;
+    let lastProgressAt = 0;
+
+    const emitProgress = () => {
+      const now = Date.now();
+      if (now - lastProgressAt < PROGRESS_EMIT_INTERVAL) return;
+      lastProgressAt = now;
+      event.sender.send('scan-progress', {
+        scannedCount,
+        mediaCount,
+        done: false
+      });
     };
 
-    const allFiles = walkSync(fullPath);
-    
-    const mediaFiles = allFiles.filter(filepath => {
-      const ext = path.extname(filepath).toLowerCase();
-      return ['.mp4', '.mkv', '.avi', '.mov', '.webm'].includes(ext);
-    });
-    
-    return mediaFiles.map(filepath => {
-      const file = path.basename(filepath);
-      const dir = path.dirname(filepath);
-      // Clean up pirate group tags like [AnimePahe], remove extension, and replace underscores with spaces
-      let cleanName = file.replace(/\[.*?\]/g, '').trim(); // Remove brackets
-      cleanName = path.basename(cleanName, path.extname(cleanName)); // Remove extension
-      cleanName = cleanName.replace(/[_\.]+/g, ' ').trim(); // Replace underscores/dots with spaces
-      // Sometimes it leaves leading hyphens like "- 01 1080p"
-      cleanName = cleanName.replace(/^[-\s]+/, '');
-      
-      // Check for offline metadata/artwork
-      const baseNoExt = path.basename(file, path.extname(file));
-      const posterPath = path.join(dir, 'poster.jpg');
-      const fanartPath = path.join(dir, 'fanart.jpg');
-      const nfoPath = path.join(dir, `${baseNoExt}.nfo`);
-      const movieNfoPath = path.join(dir, 'movie.nfo');
-      
-      const localPoster = fs.existsSync(posterPath) ? `file:///${posterPath.replace(/\\/g, '/')}` : null;
-      const localFanart = fs.existsSync(fanartPath) ? `file:///${fanartPath.replace(/\\/g, '/')}` : null;
-      
-      let localNfoContent = null;
-      if (fs.existsSync(nfoPath)) {
-        localNfoContent = fs.readFileSync(nfoPath, 'utf8');
-      } else if (fs.existsSync(movieNfoPath)) {
-        localNfoContent = fs.readFileSync(movieNfoPath, 'utf8');
+    const mediaFiles = [];
+    const dirsToVisit = [fullPath];
+
+    while (dirsToVisit.length > 0 && scannedCount < MAX_SCANNED_FILES) {
+      const currentDir = dirsToVisit.pop();
+      let entries = [];
+
+      try {
+        entries = await fsPromises.readdir(currentDir, { withFileTypes: true });
+      } catch {
+        continue;
       }
-      
-      return {
-        name: cleanName || file, // Fallback to raw file if regex wipes it completely
-        path: filepath,
-        folderName: dir !== fullPath ? path.basename(dir) : undefined,
-        localPoster,
-        localFanart,
-        localNfoContent
-      };
+
+      for (const entry of entries) {
+        if (scannedCount >= MAX_SCANNED_FILES) break;
+
+        const filepath = path.join(currentDir, entry.name);
+        scannedCount += 1;
+        emitProgress();
+
+        if (entry.isSymbolicLink()) continue;
+        if (entry.isDirectory()) {
+          dirsToVisit.push(filepath);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!SUPPORTED_MEDIA_EXTENSIONS.has(ext)) continue;
+
+        mediaFiles.push(filepath);
+        mediaCount += 1;
+      }
+    }
+
+    const enrichedFiles = await Promise.all(
+      mediaFiles.map(async (filepath) => {
+        let stats;
+        try {
+          stats = await fsPromises.stat(filepath);
+        } catch {
+          return null;
+        }
+
+        const file = path.basename(filepath);
+        const dir = path.dirname(filepath);
+
+        let cleanName = file.replace(/\[.*?\]/g, '').trim();
+        cleanName = path.basename(cleanName, path.extname(cleanName));
+        cleanName = cleanName.replace(/[_\.]+/g, ' ').trim();
+        cleanName = cleanName.replace(/^[-\s]+/, '');
+
+        const baseNoExt = path.basename(file, path.extname(file));
+        const posterPath = path.join(dir, 'poster.jpg');
+        const fanartPath = path.join(dir, 'fanart.jpg');
+        const nfoPath = path.join(dir, `${baseNoExt}.nfo`);
+        const movieNfoPath = path.join(dir, 'movie.nfo');
+
+        let localPoster = null;
+        let localFanart = null;
+        try {
+          await fsPromises.access(posterPath, fs.constants.R_OK);
+          localPoster = toLocalUri(posterPath);
+        } catch {}
+        try {
+          await fsPromises.access(fanartPath, fs.constants.R_OK);
+          localFanart = toLocalUri(fanartPath);
+        } catch {}
+
+        let localNfoContent = await tryReadNfo(nfoPath);
+        if (!localNfoContent) {
+          localNfoContent = await tryReadNfo(movieNfoPath);
+        }
+
+        return {
+          name: cleanName || file,
+          path: filepath,
+          folderName: dir !== fullPath ? path.basename(dir) : undefined,
+          localPoster,
+          localFanart,
+          localNfoContent,
+          size: stats.size,
+          mtimeMs: stats.mtimeMs
+        };
+      })
+    );
+
+    const result = enrichedFiles.filter(Boolean).sort((a, b) => a.path.localeCompare(b.path));
+    event.sender.send('scan-progress', {
+      scannedCount,
+      mediaCount: result.length,
+      done: true,
+      hitScanLimit: scannedCount >= MAX_SCANNED_FILES
     });
+    return result;
   } catch (error) {
     console.error("Error scanning directory:", error);
+    event.sender.send('scan-progress', { done: true, error: true });
     return [];
   }
 });
