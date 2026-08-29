@@ -29,7 +29,12 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
     document.body.style.overflow = 'hidden';
     
     // Fetch TMDB
-    const title = video.meta?.title || video.name;
+    let title = video.meta?.title || video.name;
+    if (video.relativePath) {
+      // Use the root folder name for series if it's nested
+      title = video.relativePath.split('/')[0];
+    }
+    
     getTMDBMetadata(title).then(res => {
       if (res) setTmdb(res);
     });
@@ -70,14 +75,14 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 overflow-y-auto"
+        className="fixed inset-0 z-[200] bg-black/80 flex flex-col items-center pt-10 px-4 overflow-y-auto"
         onClick={onClose}
       >
         <motion.div 
           initial={{ y: 50, opacity: 0, scale: 0.95 }}
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: 20, opacity: 0, scale: 0.95 }}
-          className="bg-[#181818] w-full max-w-4xl rounded-lg shadow-2xl overflow-hidden relative my-10"
+          className="bg-[#181818] w-full max-w-4xl rounded-lg shadow-2xl overflow-hidden relative mb-10 shrink-0"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button */}
@@ -119,7 +124,7 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
             <div className="flex-1">
               <div className="flex items-center gap-3 text-sm text-gray-400 font-semibold mb-6">
                 <span className="text-green-400">{tmdb?.rating ? `${Math.round(tmdb.rating * 10)}% Match` : '98% Match'}</span>
-                <span>{new Date(video.dateModified || Date.now()).getFullYear()}</span>
+                <span>{tmdb?.year || new Date(video.dateModified || Date.now()).getFullYear()}</span>
                 <span className="border border-gray-600 px-1.5 py-0.5 rounded text-xs">HD</span>
               </div>
               <p className="text-gray-200 leading-relaxed text-lg mb-8">
@@ -199,7 +204,10 @@ export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFil
   const [tmdb, setTmdb] = useState<TMDBResult | null>(null);
 
   useEffect(() => {
-    const title = video.meta?.title || video.name;
+    let title = video.meta?.title || video.name;
+    if (video.relativePath) {
+      title = video.relativePath.split('/')[0];
+    }
     getTMDBMetadata(title).then(res => {
       if (res) setTmdb(res);
     });

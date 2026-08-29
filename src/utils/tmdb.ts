@@ -7,6 +7,7 @@ export interface TMDBResult {
   backdrop: string | null;
   genres: string[];
   rating: number;
+  year: string | null;
 }
 
 export async function getTMDBMetadata(title: string): Promise<TMDBResult | null> {
@@ -29,12 +30,14 @@ export async function getTMDBMetadata(title: string): Promise<TMDBResult | null>
     }
 
     const first = data.results[0];
+    const year = first.release_date ? first.release_date.substring(0, 4) : (first.first_air_date ? first.first_air_date.substring(0, 4) : null);
     const result: TMDBResult = {
       synopsis: first.overview || '',
       poster: first.poster_path ? `https://image.tmdb.org/t/p/w500${first.poster_path}` : null,
       backdrop: first.backdrop_path ? `https://image.tmdb.org/t/p/w1280${first.backdrop_path}` : null,
       genres: [],
-      rating: first.vote_average || 0
+      rating: first.vote_average || 0,
+      year: year
     };
 
     cache[title] = result;
