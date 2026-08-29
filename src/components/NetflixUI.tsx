@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Play, Plus, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getTMDBMetadata, type TMDBResult } from '../utils/tmdb';
+import { EpisodeRow } from './EpisodeRow';
 
 // --- Types ---
 export interface LocalFile {
@@ -148,34 +149,11 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
                     )}
                   </div>
                   
-                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                    {episodesToRender.map((ep, i) => (
-                      <div 
-                        key={ep.path} 
-                        className="flex items-center gap-4 p-4 rounded hover:bg-[#2b2b2b] transition cursor-pointer group border-b border-gray-800/50"
-                        onClick={() => onPlay(ep)}
-                      >
-                        <div className="text-gray-400 font-bold w-6 text-xl">{i + 1}</div>
-                        <div className="relative w-32 aspect-video bg-gray-800 rounded overflow-hidden flex-shrink-0">
-                          {ep.thumbnail ? (
-                            <img src={ep.thumbnail} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-600">No Image</div>
-                          )}
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                            <Play className="w-8 h-8 text-white fill-white" />
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="text-white font-bold mb-1">{ep.meta?.title || ep.name}</h4>
-                          <p className="text-sm text-gray-400 line-clamp-2">{ep.meta?.description || 'No description.'}</p>
-                        </div>
-                        {ep.duration && (
-                          <div className="text-gray-500 text-sm">{Math.floor(ep.duration / 60)}m</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                      {episodesToRender.map((ep, i) => (
+                        <EpisodeRow key={ep.path} ep={ep} index={i} seriesTvId={tmdb?.tvId} onPlay={onPlay} />
+                      ))}
+                    </div>
                 </div>
               )}
             </div>

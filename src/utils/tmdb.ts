@@ -1,5 +1,6 @@
 const TMDB_API_KEY = '4f9f2f84e320ca3494c1fe586f3a5318';
-const CACHE_KEY = 'tmdb_metadata_cache_v2';
+const CACHE_KEY = 'tmdb_metadata_cache_v3';
+const EP_CACHE_KEY = 'tmdb_episodes_cache_v1';
 
 export interface TMDBResult {
   synopsis: string;
@@ -8,10 +9,10 @@ export interface TMDBResult {
   genres: string[];
   rating: number;
   year: string | null;
+  tvId?: number;
 }
 
 export async function getTMDBMetadata(title: string): Promise<TMDBResult | null> {
-  // Only attempt fetch if online
   if (!navigator.onLine) return getCached(title);
   
   const cache = getFullCache();
@@ -24,7 +25,7 @@ export async function getTMDBMetadata(title: string): Promise<TMDBResult | null>
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.results || data.results.length === 0) {
-      cache[title] = null; // cache negative result so we don't spam
+      cache[title] = null;
       saveCache(cache);
       return null;
     }
@@ -37,7 +38,8 @@ export async function getTMDBMetadata(title: string): Promise<TMDBResult | null>
       backdrop: first.backdrop_path ? `https://image.tmdb.org/t/p/w1280${first.backdrop_path}` : null,
       genres: [],
       rating: first.vote_average || 0,
-      year: year
+      year: year,
+      tvId: first.media_type === 'tv' ? first.id : undefined
     };
 
     cache[title] = result;
@@ -47,6 +49,48 @@ export async function getTMDBMetadata(title: string): Promise<TMDBResult | null>
     console.error('TMDB fetch error:', err);
     return null;
   }
+}
+
+export async function getTMDBEpisode(tvId: number, season: number, episode: number): Promise<string | null> {
+  if (!navigator.onLine) return null;
+  
+  const key = `${tvId}_S${season}E${episode}`;
+  let cache: Record<string, string | null> = {};
+  try {
+    const data = localStorage.getItem(EP_CACHE_KEY);
+    if (data) cache = JSON.parse(data);
+  } catch {}
+
+  if (cache[key] !== undefined) return cache[key];
+
+  try {
+    const res = await fetch(`https://api.themoviedb.org/3/tv/${tvId}/season/${season}/episode/${episode}?api_key=${TMDB_API_KEY}&language=en-US`);
+    if (!res.ok) {
+      cache[key] = null;
+      localStorage.setItem(EP_CACHE_KEY, JSON.stringify(cache));
+      return null;
+    }
+    const data = await res.json();
+    const synopsis = data.overview || null;
+    cache[key] = synopsis;
+    localStorage.setItem(EP_CACHE_KEY, JSON.stringify(cache));
+    return synopsis;
+  } catch (err) {
+    return null;
+  }
+}
+
+export function parseSeasonEpisode(filename: string): { season: number, episode: number } | null {
+  const m1 = filename.match(/s(\d+)\s*e(\d+)/i);
+  if (m1) return { season: parseInt(m1[1]), episode: parseInt(m1[2]) };
+  
+  const m2 = filename.match(/season\s*(\d+)\s*episode\s*(\d+)/i);
+  if (m2) return { season: parseInt(m2[1]), episode: parseInt(m2[2]) };
+  
+  const m3 = filename.match(/(?:^|\s)(\d+)x(\d+)(?:\s|$)/i);
+  if (m3) return { season: parseInt(m3[1]), episode: parseInt(m3[2]) };
+  
+  return null;
 }
 
 function getFullCache(): Record<string, TMDBResult | null> {
