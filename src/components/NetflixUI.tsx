@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Play, Plus, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getTMDBMetadata, type TMDBResult } from '../utils/tmdb';
 
 // --- Types ---
 export interface LocalFile {
@@ -21,11 +22,20 @@ export interface LocalFile {
 
 // --- Detail Modal ---
 export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onClose: () => void, onPlay: (v: LocalFile) => void }) {
+  const [tmdb, setTmdb] = useState<TMDBResult | null>(null);
+
   // Prevent scrolling on body when modal is open
   useEffect(() => {
     document.body.style.overflow = 'hidden';
+    
+    // Fetch TMDB
+    const title = video.meta?.title || video.name;
+    getTMDBMetadata(title).then(res => {
+      if (res) setTmdb(res);
+    });
+
     return () => { document.body.style.overflow = 'auto'; };
-  }, []);
+  }, [video]);
 
   const [selectedSubfolder, setSelectedSubfolder] = useState<string>('');
 
@@ -77,7 +87,9 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
 
           {/* Hero Image */}
           <div className="relative w-full aspect-[16/7]">
-            {video.thumbnail ? (
+            {tmdb?.backdrop ? (
+              <img src={tmdb.backdrop} alt="Backdrop" className="w-full h-full object-cover" />
+            ) : video.thumbnail ? (
               <img src={video.thumbnail} alt={video.meta?.title || video.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-gray-800 to-black" />
@@ -106,12 +118,12 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
           <div className="p-10 flex flex-col md:flex-row gap-12">
             <div className="flex-1">
               <div className="flex items-center gap-3 text-sm text-gray-400 font-semibold mb-6">
-                <span className="text-green-400">98% Match</span>
+                <span className="text-green-400">{tmdb?.rating ? `${Math.round(tmdb.rating * 10)}% Match` : '98% Match'}</span>
                 <span>{new Date(video.dateModified || Date.now()).getFullYear()}</span>
                 <span className="border border-gray-600 px-1.5 py-0.5 rounded text-xs">HD</span>
               </div>
               <p className="text-gray-200 leading-relaxed text-lg mb-8">
-                {video.meta?.description || 'No description available for this local file. This file was automatically indexed from your local folders.'}
+                {tmdb?.synopsis || video.meta?.description || 'No description available for this local file. This file was automatically indexed from your local folders.'}
               </p>
 
               {video.isFolder && subfolderNames.length > 0 && (
@@ -184,6 +196,14 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
 export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFile, onPlay: (v: LocalFile) => void, onInfo: (v: LocalFile) => void, progress?: number }) {
   const [isHovered, setIsHovered] = useState(false);
   const hoverTimeoutRef = useRef<number | null>(null);
+  const [tmdb, setTmdb] = useState<TMDBResult | null>(null);
+
+  useEffect(() => {
+    const title = video.meta?.title || video.name;
+    getTMDBMetadata(title).then(res => {
+      if (res) setTmdb(res);
+    });
+  }, [video]);
 
   const handleMouseEnter = () => {
     if (video.isFolder) return;
@@ -213,7 +233,9 @@ export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFil
     >
       {/* Base Card (Underneath) */}
       <div className="w-full h-full bg-gray-800 rounded-md overflow-hidden relative">
-        {video.thumbnail ? (
+        {tmdb?.backdrop ? (
+          <img src={tmdb.backdrop} alt="Backdrop" className="w-full h-full object-cover" />
+        ) : video.thumbnail ? (
           <img src={video.thumbnail} alt={video.meta?.title || video.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center p-2 text-center text-sm font-bold text-gray-400">
