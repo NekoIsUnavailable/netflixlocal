@@ -92,7 +92,7 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
 
           {/* Hero Image */}
           <div className="relative w-full aspect-[16/7]">
-            {tmdb?.backdrop ? (
+            {video.isFolder && tmdb?.backdrop ? (
               <img src={tmdb.backdrop} alt="Backdrop" className="w-full h-full object-cover" />
             ) : video.thumbnail ? (
               <img src={video.thumbnail} alt={video.meta?.title || video.name} className="w-full h-full object-cover" />
@@ -241,12 +241,12 @@ export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFil
     >
       {/* Base Card (Underneath) */}
       <div className="w-full h-full bg-gray-800 rounded-md overflow-hidden relative">
-        {tmdb?.backdrop ? (
+        {video.isFolder && tmdb?.backdrop ? (
           <img src={tmdb.backdrop} alt="Backdrop" className="w-full h-full object-cover" />
         ) : video.thumbnail ? (
           <img src={video.thumbnail} alt={video.meta?.title || video.name} className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center p-2 text-center text-sm font-bold text-gray-400">
+          <div className="w-full h-full bg-gray-700 flex items-center justify-center p-4 text-center font-bold text-gray-300">
             {video.meta?.title || video.name}
           </div>
         )}

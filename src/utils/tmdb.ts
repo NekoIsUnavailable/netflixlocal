@@ -1,5 +1,5 @@
 const TMDB_API_KEY = '4f9f2f84e320ca3494c1fe586f3a5318';
-const CACHE_KEY = 'tmdb_metadata_cache';
+const CACHE_KEY = 'tmdb_metadata_cache_v2';
 
 export interface TMDBResult {
   synopsis: string;
