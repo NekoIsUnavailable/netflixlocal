@@ -4,11 +4,25 @@ A fully offline, Netflix-style desktop media player for your local video collect
 
 ## UI Showcase
 
-![Home Screen](screenshots/home.png)
+### 1. Splash Screen
+A clean and immersive startup experience featuring the Kudflix branding.
 ![Startup](screenshots/startup.png)
+
+### 2. Who's Watching?
+Manage your local viewing profiles, complete with custom themes and anime avatars.
 ![Profiles](screenshots/profiles.png)
-![Info Modal](screenshots/modal.png)
-![Settings](screenshots/settings.png)
+
+### 3. Choose Avatar
+Select from a curated grid of Key VN character avatars or upload your own custom image.
+![Choose Avatar](screenshots/choose_avatar.png)
+
+### 4. Home Screen & Hero Banner
+Your local media library displayed in a sleek, Netflix-style layout, featuring a dynamic hero video preview with Ken Burns animation effects.
+![Home Screen](screenshots/home.png)
+
+### 5. Quick Hover Actions
+Instantly preview episodes, check progress, and launch playback seamlessly from hover cards.
+![Quick Actions](screenshots/modal.png)
 
 ## Features
 
