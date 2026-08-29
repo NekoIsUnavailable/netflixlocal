@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export interface LocalFile {
   name: string;
   path: string;
+  relativePath?: string;
   meta?: { title?: string; description?: string; poster?: string; year?: string; genre?: string; };
   thumbnail?: string;
   duration?: number;
@@ -14,6 +15,8 @@ export interface LocalFile {
   localFanart?: string | null;
   localNfoContent?: string | null;
   folderName?: string;
+  isFolder?: boolean;
+  folderFiles?: LocalFile[];
 }
 
 // --- Detail Modal ---
@@ -23,6 +26,33 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = 'auto'; };
   }, []);
+
+  const [selectedSubfolder, setSelectedSubfolder] = useState<string>('');
+
+  const subfolders = useState(() => {
+    if (!video.isFolder || !video.folderFiles) return {};
+    const groups: Record<string, LocalFile[]> = {};
+    video.folderFiles.forEach(f => {
+      const parts = f.relativePath ? f.relativePath.split('/') : [];
+      let sub = 'Episodes';
+      if (parts.length > 2) {
+        sub = parts[1];
+      }
+      if (!groups[sub]) groups[sub] = [];
+      groups[sub].push(f);
+    });
+    return groups;
+  })[0];
+
+  const subfolderNames = Object.keys(subfolders).sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+  
+  useEffect(() => {
+    if (subfolderNames.length > 0 && !selectedSubfolder) {
+      setSelectedSubfolder(subfolderNames[0]);
+    }
+  }, [subfolderNames, selectedSubfolder]);
+
+  const episodesToRender = subfolders[selectedSubfolder] || [];
 
   return (
     <AnimatePresence>
@@ -57,7 +87,13 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
               <h2 className="text-4xl md:text-5xl font-bold text-white drop-shadow-md mb-6">{video.meta?.title || video.name}</h2>
               <div className="flex gap-3">
                 <button 
-                  onClick={() => onPlay(video)}
+                  onClick={() => {
+                    if (video.isFolder && video.folderFiles && video.folderFiles.length > 0) {
+                      onPlay(episodesToRender[0] || video.folderFiles[0]);
+                    } else {
+                      onPlay(video);
+                    }
+                  }}
                   className="flex items-center gap-2 bg-white text-black px-8 py-2 rounded font-bold hover:bg-white/80 transition"
                 >
                   <Play className="w-6 h-6 fill-black" /> Play
@@ -74,10 +110,59 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
                 <span>{new Date(video.dateModified || Date.now()).getFullYear()}</span>
                 <span className="border border-gray-600 px-1.5 py-0.5 rounded text-xs">HD</span>
               </div>
-              <p className="text-gray-200 leading-relaxed text-lg">
+              <p className="text-gray-200 leading-relaxed text-lg mb-8">
                 {video.meta?.description || 'No description available for this local file. This file was automatically indexed from your local folders.'}
               </p>
+
+              {video.isFolder && subfolderNames.length > 0 && (
+                <div className="mt-8 border-t border-gray-800 pt-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-bold text-white">Episodes</h3>
+                    {subfolderNames.length > 1 && (
+                      <select 
+                        value={selectedSubfolder}
+                        onChange={(e) => setSelectedSubfolder(e.target.value)}
+                        className="bg-[#242424] text-white border border-gray-600 rounded px-4 py-2 font-semibold outline-none focus:border-white transition"
+                      >
+                        {subfolderNames.map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                    {episodesToRender.map((ep, i) => (
+                      <div 
+                        key={ep.path} 
+                        className="flex items-center gap-4 p-4 rounded hover:bg-[#2b2b2b] transition cursor-pointer group border-b border-gray-800/50"
+                        onClick={() => onPlay(ep)}
+                      >
+                        <div className="text-gray-400 font-bold w-6 text-xl">{i + 1}</div>
+                        <div className="relative w-32 aspect-video bg-gray-800 rounded overflow-hidden flex-shrink-0">
+                          {ep.thumbnail ? (
+                            <img src={ep.thumbnail} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-600">No Image</div>
+                          )}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                            <Play className="w-8 h-8 text-white fill-white" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-white font-bold mb-1">{ep.meta?.title || ep.name}</h4>
+                          <p className="text-sm text-gray-400 line-clamp-2">{ep.meta?.description || 'No description.'}</p>
+                        </div>
+                        {ep.duration && (
+                          <div className="text-gray-500 text-sm">{Math.floor(ep.duration / 60)}m</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+            
             <div className="w-full md:w-1/3 text-sm text-gray-400 space-y-6">
               <div>
                 <span className="text-gray-500 block mb-1">File Path:</span> 
@@ -85,7 +170,7 @@ export function DetailModal({ video, onClose, onPlay }: { video: LocalFile, onCl
               </div>
               <div>
                 <span className="text-gray-500 block mb-1">Genres:</span> 
-                <span className="text-gray-300">Local Media, Personal, Video</span>
+                <span className="text-gray-300">Local Media, Personal, Video{video.isFolder ? ', Series' : ''}</span>
               </div>
             </div>
           </div>
@@ -101,12 +186,14 @@ export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFil
   const hoverTimeoutRef = useRef<number | null>(null);
 
   const handleMouseEnter = () => {
+    if (video.isFolder) return;
     hoverTimeoutRef.current = window.setTimeout(() => {
       setIsHovered(true);
     }, 400); // 400ms debounce
   };
 
   const handleMouseLeave = () => {
+    if (video.isFolder) return;
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     setIsHovered(false);
   };
@@ -117,7 +204,11 @@ export function VideoCard({ video, onPlay, onInfo, progress }: { video: LocalFil
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={() => {
-        if (!isHovered) onPlay(video); // Quick click = play
+        if (video.isFolder) {
+          onInfo(video);
+        } else if (!isHovered) {
+          onPlay(video); // Quick click = play
+        }
       }}
     >
       {/* Base Card (Underneath) */}

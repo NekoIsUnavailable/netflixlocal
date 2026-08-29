@@ -2,7 +2,10 @@ const { app, BrowserWindow, ipcMain, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-const isDev = process.env.VITE_DEV === 'true';
+const isDev = !app.isPackaged;
+
+// Allow unmuted autoplay
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -24,7 +27,6 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
@@ -119,6 +121,7 @@ ipcMain.handle('scan-directory', async (event, dirPath) => {
       return {
         name: cleanName || file, // Fallback to raw file if regex wipes it completely
         path: filepath,
+        relativePath: path.relative(fullPath, filepath).replace(/\\/g, '/'),
         folderName: dir !== fullPath ? path.basename(dir) : undefined,
         localPoster,
         localFanart,

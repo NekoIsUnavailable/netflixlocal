@@ -275,12 +275,28 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => {
-                      const newProfiles = profiles.map(p => p.id === editingProfile.id ? editingProfile : p);
+                      const exists = profiles.find(p => p.id === editingProfile.id);
+                      let newProfiles;
+                      if (exists) {
+                        newProfiles = profiles.map(p => p.id === editingProfile.id ? editingProfile : p);
+                      } else {
+                        newProfiles = [...profiles, editingProfile];
+                      }
                       setProfiles(newProfiles);
                       localStorage.setItem('netflix_profiles', JSON.stringify(newProfiles));
                       setEditingProfile(null);
                     }} className="bg-white text-black px-4 py-1.5 rounded text-sm font-bold hover:bg-gray-200 transition">Save</button>
-                    <button onClick={() => setEditingProfile(null)} className="text-gray-400 text-sm hover:text-white transition">Cancel</button>
+                    <button onClick={() => setEditingProfile(null)} className="text-gray-400 text-sm hover:text-white transition px-4 py-1.5 border border-gray-600 rounded">Cancel</button>
+                    {profiles.find(p => p.id === editingProfile.id) && profiles.length > 1 && (
+                      <button onClick={() => {
+                        const newProfiles = profiles.filter(p => p.id !== editingProfile.id);
+                        setProfiles(newProfiles);
+                        localStorage.setItem('netflix_profiles', JSON.stringify(newProfiles));
+                        setEditingProfile(null);
+                      }} className="ml-auto text-red-500 text-sm hover:text-white hover:bg-red-500 transition px-4 py-1.5 border border-red-500 rounded font-bold">
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -292,9 +308,20 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                         <img src={p.avatar} className="w-full h-full object-cover" />
                       </div>
                       <span className="text-white font-semibold flex-grow">{p.name}</span>
-                      <button onClick={() => setEditingProfile(p)} className="text-gray-400 hover:text-white text-sm font-semibold transition">Edit</button>
+                      <button onClick={() => setEditingProfile(p)} className="text-gray-400 hover:text-white text-sm font-semibold transition bg-gray-700/50 px-3 py-1 rounded">Edit</button>
                     </div>
                   ))}
+                  
+                  <button onClick={() => {
+                    setEditingProfile({
+                      id: Date.now().toString(),
+                      name: 'New Profile',
+                      color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'),
+                      avatar: `./avatars/key${Math.floor(Math.random() * 9) + 1}.jpg`
+                    });
+                  }} className="w-full flex items-center justify-center gap-2 bg-gray-800/30 hover:bg-gray-800/80 p-3 rounded-lg border border-gray-700 border-dashed text-gray-400 hover:text-white transition font-semibold">
+                    + Add New Profile
+                  </button>
                 </div>
               )}
             </div>

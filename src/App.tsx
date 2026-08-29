@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { fetchMetadata } from './utils/metadata';
 import { generateVideoThumbnail } from './utils/thumbnail';
-import { Play, Info, ChevronLeft, FolderSearch, Settings as SettingsIcon, Search } from 'lucide-react';
+import { Play, Info, ChevronLeft, FolderSearch, Settings as SettingsIcon, Search, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SettingsModal } from './components/SettingsModal';
 import { ContentRow, DetailModal } from './components/NetflixUI';
@@ -24,7 +24,7 @@ export default function App() {
   // Settings State
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
-    accentColor: '#003e8f',
+    accentColor: '#fdbce6',
     wallpaperPath: '',
     overlayOpacity: 0.5,
     appName: 'Kudflix',
@@ -213,7 +213,7 @@ export default function App() {
   };
 
   // Grouping for rows
-  const { shows, movies, continueWatching, top10, collections } = useMemo(() => {
+  const { shows, movies, continueWatching, top10, collections, folders } = useMemo(() => {
     // TV Shows: duration < 3600 seconds (1 hour)
     const shows = files.filter(f => (f.duration || 0) > 0 && (f.duration || 0) < 3600);
     // Movies: duration >= 3600 seconds
@@ -232,6 +232,31 @@ export default function App() {
     // Smart Collections (by Genre and Folder)
     const genreMap = new Map<string, LocalFile[]>();
     const folderMap = new Map<string, LocalFile[]>();
+    const rootFolders = new Map<string, LocalFile[]>();
+
+    files.forEach(f => {
+      if (f.relativePath) {
+        const parts = f.relativePath.split('/');
+        if (parts.length > 1) {
+          const root = parts[0];
+          if (!rootFolders.has(root)) rootFolders.set(root, []);
+          rootFolders.get(root)!.push(f);
+        }
+      }
+    });
+
+    const folderPseudoFiles: LocalFile[] = Array.from(rootFolders.entries()).map(([root, fList]) => ({
+      name: root,
+      path: `folder://${root}`,
+      isFolder: true,
+      folderFiles: fList.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+      thumbnail: fList[0].thumbnail || fList[0].localFanart || fList[0].localPoster || undefined,
+      meta: {
+        title: root,
+        description: `A collection of ${fList.length} video files inside the ${root} folder.`,
+      },
+      dateModified: Date.now()
+    }));
 
     movies.forEach(m => {
       // Genre
@@ -257,14 +282,61 @@ export default function App() {
       .filter(([_, v]) => v.length >= 2) // > 1 movie in a subfolder = Franchise!
       .map(([k, v]) => ({ title: `${k} Collection`, videos: v }));
 
-    return { shows, movies, continueWatching, top10, collections: [...franchises, ...collections] };
+    return { shows, movies, continueWatching, top10, collections: [...franchises, ...collections], folders: folderPseudoFiles };
   }, [files, progresses, activeProfile]);
 
-  // Pick a random featured item for Hero
-  const featured = useMemo(() => {
-    if (files.length === 0) return null;
-    return files[Math.floor(Math.random() * files.length)];
-  }, [files]);
+  // Dynamic Hero Banner
+  const [featuredIndex, setFeaturedIndex] = useState(0);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [delayOver, setDelayOver] = useState(false);
+  const [isHeroMuted, setIsHeroMuted] = useState(true);
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
+  
+  const featured = files.length > 0 ? files[featuredIndex % files.length] : null;
+
+  // 1. Initial 3s delay on image
+  useEffect(() => {
+    if (!featured) return;
+    
+    setDelayOver(false);
+    setIsVideoPlaying(false);
+    
+    const t = setTimeout(() => {
+      setDelayOver(true);
+    }, 3000);
+    
+    return () => clearTimeout(t);
+  }, [featuredIndex, files.length, featured?.path]);
+
+  // 2. Play when mounted
+  useEffect(() => {
+    if (delayOver && heroVideoRef.current) {
+      heroVideoRef.current.play().catch(e => {
+        console.error("Play failed:", e);
+      });
+    }
+  }, [delayOver]);
+
+  const handleHeroTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const video = e.currentTarget;
+    
+    // Safety fallback: if video is advancing, it is playing
+    if (video.currentTime > 0.1 && !isVideoPlaying) {
+      setIsVideoPlaying(true);
+    }
+    
+    if (video.currentTime >= 15) {
+      // End of preview
+      setDelayOver(false);
+      setIsVideoPlaying(false);
+      
+      // Wait 5s on image, then cycle
+      setTimeout(() => {
+        setFeaturedIndex((prev) => (prev + 1) % files.length);
+      }, 5000);
+    }
+  };
+
 
   return (
     // @ts-ignore - zoom works in electron
@@ -375,45 +447,87 @@ export default function App() {
           {/* Hero Banner with Ken Burns */}
           {featured && (
             <div className="relative w-full overflow-hidden" style={{ height: `${85 / settings.uiScale}vh` }}>
-              {/* Ken Burns Image Wrapper */}
-              <div className="absolute inset-0 w-full h-full">
-                {featured.thumbnail ? (
-                  <img 
-                    src={featured.thumbnail} 
-                    alt={featured.meta?.title || featured.name}
-                    className="w-full h-full object-cover opacity-80 animate-ken-burns scale-110"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-tr from-gray-900 to-gray-800" />
-                )}
-              </div>
+                  {/* Image and Video Wrapper */}
+                  <div className="absolute inset-0 w-full h-full bg-gray-900">
+                    {/* Static Image */}
+                    <div 
+                      className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ${isVideoPlaying ? 'opacity-0' : 'opacity-100'}`}
+                    >
+                      {featured.thumbnail ? (
+                        <img 
+                          src={featured.thumbnail} 
+                          alt={featured.meta?.title || featured.name}
+                          className="w-full h-full object-cover opacity-80 animate-ken-burns scale-110"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-tr from-gray-900 to-gray-800" />
+                      )}
+                    </div>
+  
+                    {/* Video Preview */}
+                    <div 
+                      className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'}`}
+                    >
+                      {delayOver && (
+                        <video
+                          ref={heroVideoRef}
+                          src={`file:///${featured.path.replace(/\\/g, '/')}`}
+                          autoPlay
+                          muted={isHeroMuted}
+                          onPlay={() => setIsVideoPlaying(true)}
+                          onTimeUpdate={handleHeroTimeUpdate}
+                          onEnded={() => setIsVideoPlaying(false)}
+                          className="w-full h-full object-cover opacity-80"
+                        />
+                      )}
+                    </div>
+                  </div>
               
               <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
               
-              <div className="absolute bottom-[25%] left-10 max-w-2xl z-10">
-                <h1 className="text-5xl md:text-7xl font-bold mb-4 drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
-                  {featured.meta?.title || featured.name}
-                </h1>
-                <p className="text-lg md:text-xl text-gray-200 mb-8 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] line-clamp-3 font-medium">
-                  {featured.meta?.description || 'A local media file from your personal collection.'}
-                </p>
-                <div className="flex gap-4">
+                <div className="absolute bottom-[25%] left-10 right-10 z-10 flex justify-between items-end">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={featured.path}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.5 }}
+                      className="max-w-2xl"
+                    >
+                      <h1 className="text-5xl md:text-7xl font-bold mb-4 drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
+                        {featured.meta?.title || featured.name}
+                      </h1>
+                      <p className="text-lg md:text-xl text-gray-200 mb-8 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] line-clamp-3 font-medium">
+                        {featured.meta?.description || 'A local media file from your personal collection.'}
+                      </p>
+                      <div className="flex gap-4">
+                        <button 
+                          onClick={() => handlePlayVideo(featured)}
+                          className="flex items-center gap-2 bg-white text-black px-8 py-3 rounded text-xl font-bold hover:bg-white/80 transition"
+                        >
+                          <Play className="w-7 h-7 fill-black" /> Play
+                        </button>
+                        <button 
+                          onClick={() => setInfoVideo(featured)}
+                          className="flex items-center gap-2 bg-gray-500/70 text-white px-8 py-3 rounded text-xl font-bold hover:bg-gray-500/50 transition"
+                        >
+                          <Info className="w-7 h-7" /> More Info
+                        </button>
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                  
+                  {/* Mute Toggle Button */}
                   <button 
-                    onClick={() => handlePlayVideo(featured)}
-                    className="flex items-center gap-2 bg-white text-black px-8 py-3 rounded text-xl font-bold hover:bg-white/80 transition"
+                    onClick={() => setIsHeroMuted(!isHeroMuted)}
+                    className="p-3 border rounded-full border-gray-400 bg-black/40 hover:bg-white/20 transition text-white mb-8"
                   >
-                    <Play className="w-7 h-7 fill-black" /> Play
-                  </button>
-                  <button 
-                    onClick={() => setInfoVideo(featured)}
-                    className="flex items-center gap-2 bg-gray-500/70 text-white px-8 py-3 rounded text-xl font-bold hover:bg-gray-500/50 transition"
-                  >
-                    <Info className="w-7 h-7" /> More Info
+                    {isHeroMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
                   </button>
                 </div>
-              </div>
             </div>
           )}
 
@@ -430,8 +544,12 @@ export default function App() {
               <ContentRow title="Home" videos={files} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
             )}
             
+            {(activeTab === 'home' || activeTab === 'tv') && folders.length > 0 && (
+              <ContentRow title="Series" videos={folders} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
+            )}
+
             {(activeTab === 'home' || activeTab === 'tv') && shows.length > 0 && (
-              <ContentRow title="TV Shows" videos={shows} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
+              <ContentRow title="TV Shows (All)" videos={shows} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
             )}
             
             {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (
@@ -479,18 +597,6 @@ export default function App() {
               onLoadedMetadata={handleVideoLoaded}
               className="w-full h-full outline-none"
             />
-
-            {/* Skip Intro Button */}
-            {videoRef.current && (playingVideo.duration || 0) < 3600 && videoRef.current.currentTime > 30 && videoRef.current.currentTime < 150 && (
-              <button 
-                onClick={() => {
-                  if (videoRef.current) videoRef.current.currentTime += 85;
-                }}
-                className="absolute bottom-24 right-10 bg-black/60 hover:bg-white text-white hover:text-black border border-white/40 px-6 py-2 rounded text-lg font-bold transition-all z-[302]"
-              >
-                Skip Intro ⏭️
-              </button>
-            )}
 
             {/* Next Episode Binge Overlay */}
             <AnimatePresence>

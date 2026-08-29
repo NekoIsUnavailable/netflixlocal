@@ -13,7 +13,7 @@ export interface Profile {
 const AVATAR_OPTIONS = Array.from({ length: 9 }, (_, i) => `./avatars/key${i + 1}.jpg`);
 
 export const DEFAULT_PROFILES: Profile[] = [
-  { id: '1', name: 'John', color: '#E50914', avatar: AVATAR_OPTIONS[0] },
+  { id: '1', name: 'Kud', color: '#fdbce6', avatar: AVATAR_OPTIONS[7] },
   { id: '2', name: 'Guest', color: '#0071eb', avatar: AVATAR_OPTIONS[1] }
 ];
 
@@ -27,14 +27,26 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
     const saved = localStorage.getItem('netflix_profiles');
     if (saved) {
       let parsed = JSON.parse(saved);
+      
+      // Force migrate old "John" profile to "Kud"
+      let needsSave = false;
       parsed = parsed.map((p: Profile) => {
+        if (p.name === 'John') {
+          needsSave = true;
+          return { ...p, name: 'Kud', color: '#fdbce6', avatar: AVATAR_OPTIONS[7] };
+        }
         if (p.avatar.includes('api.dicebear.com') || p.avatar.startsWith('data:image/svg') || p.avatar.includes('./avatars/avatar') || p.avatar.includes('.png')) {
+          needsSave = true;
           return { ...p, avatar: generateLocalAvatar(p.name) };
         }
         return p;
       });
+      
+      if (needsSave) {
+        localStorage.setItem('netflix_profiles', JSON.stringify(parsed));
+      }
+      
       setProfiles(parsed);
-      localStorage.setItem('netflix_profiles', JSON.stringify(parsed));
     } else {
       setProfiles(DEFAULT_PROFILES);
       localStorage.setItem('netflix_profiles', JSON.stringify(DEFAULT_PROFILES));

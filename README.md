@@ -26,6 +26,7 @@ Instantly preview episodes, check progress, and launch playback seamlessly from 
 
 ## Features
 
+- **Folders & Series Management**: Grouped TV Shows! If your videos are sorted into folders (e.g., `Naruto/Season 1/Ep1.mp4`), Kudflix automatically creates a Series card. Clicking it opens a beautiful detail modal with a season dropdown and episode list!
 - **Netflix-Style UI**: Experience a familiar, premium interface with horizontal scrolling carousels, full-width hero banners (Ken Burns effect), and Jawlet hover cards.
 - **Auto-Categorization**: Automatically sorts your videos into "TV Shows" (under 1 hour) and "Movies" (over 1 hour) by analyzing video durations on the fly.
 - **Smart Title Cleaner**: Automatically strips out pirate group tags (like `[AnimePahe]`), removes file extensions, and converts underscores/dots into spaces for a clean, professional library look. No need to rename your files or worry about embedded MKV metadata!
