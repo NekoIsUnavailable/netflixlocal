@@ -11,7 +11,10 @@ import { ProfilesScreen } from './components/ProfilesScreen';
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
+  
+  const [activeTab, setActiveTab] = useState<'home' | 'tv' | 'movies'>('home');
   const [libraryPath, setLibraryPath] = useState(localStorage.getItem('netflix_library') || '');
+
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<LocalFile | null>(null);
@@ -21,10 +24,10 @@ export default function App() {
   // Settings State
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
-    accentColor: '#E50914',
+    accentColor: '#003e8f',
     wallpaperPath: '',
     overlayOpacity: 0.5,
-    appName: 'Poopyflix',
+    appName: 'Kudflix',
     uiScale: 1.0,
     useExternalPlayer: false,
     externalPlayerPath: '',
@@ -53,6 +56,8 @@ export default function App() {
     }
   }, [activeProfile]);
 
+
+
   // Apply Settings to CSS Variables
   useEffect(() => {
     document.documentElement.style.setProperty('--theme-accent', settings.accentColor);
@@ -69,73 +74,60 @@ export default function App() {
   }, [settings]);
 
   const scanLibrary = async () => {
+    if (!libraryPath) return;
+
     if (!window.electronAPI) {
       alert("Run this inside Electron!");
       return;
     }
     setLoading(true);
-    const result = await window.electronAPI.scanDirectory(libraryPath);
-    
-    // Fetch metadata & thumbnails concurrently
-    const enrichedFiles = await Promise.all(
-      result.map(async (file: any) => {
-        let meta: { title: string; description: string; poster: string | null; year: string; genre: string } = { title: file.name, description: 'A video file from your local library.', poster: null, year: '', genre: '' };
-        
-        // 1. Try Offline NFO
-        if (file.localNfoContent) {
-          const titleMatch = file.localNfoContent.match(/<title>(.*?)<\/title>/i);
-          const plotMatch = file.localNfoContent.match(/<plot>(.*?)<\/plot>/i);
-          const yearMatch = file.localNfoContent.match(/<year>(.*?)<\/year>/i);
-          if (titleMatch) meta.title = titleMatch[1];
-          if (plotMatch) meta.description = plotMatch[1];
-          if (yearMatch) meta.year = yearMatch[1];
-        } else {
-          // 2. Try Online Metadata if no NFO
-          meta = await fetchMetadata(file.name);
-        }
-        
-        // Artwork Priority: localPoster > localFanart > online poster > generated thumbnail
-        let thumbnail = file.localFanart || file.localPoster || meta.poster;
-        let duration = 0;
-        
-        // Only generate ffmpeg thumbnail if we have absolutely no artwork
-        let skipThumbnail = false;
-        if (file.localPoster || file.localFanart) {
-          skipThumbnail = true;
-        }
-        
-        const generated = await generateVideoThumbnail(file.path, skipThumbnail);
-        if (generated) {
-          duration = generated.duration;
-          if (!thumbnail && !skipThumbnail) thumbnail = generated.thumbnail;
-        }
+    try {
+      const result = await window.electronAPI.scanDirectory(libraryPath);
+      
+      // Fetch metadata & thumbnails concurrently
+      const enrichedFiles = await Promise.all(
+        result.map(async (file: any) => {
+          let meta: { title: string; description: string; poster: string | null; year: string; genre: string } = { title: file.name, description: 'A video file from your local library.', poster: null, year: '', genre: '' };
+          
+          if (file.localNfoContent) {
+            const titleMatch = file.localNfoContent.match(/<title>(.*?)<\/title>/i);
+            const plotMatch = file.localNfoContent.match(/<plot>(.*?)<\/plot>/i);
+            const yearMatch = file.localNfoContent.match(/<year>(.*?)<\/year>/i);
+            const genreMatch = file.localNfoContent.match(/<genre>(.*?)<\/genre>/i);
+            
+            if (titleMatch) meta.title = titleMatch[1];
+            if (plotMatch) meta.description = plotMatch[1];
+            if (yearMatch) meta.year = yearMatch[1];
+            if (genreMatch) meta.genre = genreMatch[1];
+          } else {
+            meta = await fetchMetadata(file.name);
+          }
+          
+          let duration = 0;
+          let thumbnail = file.localFanart || file.localPoster || meta.poster;
 
-        return {
-          ...file,
-          meta,
-          thumbnail,
-          duration,
-          dateModified: Date.now()
-        };
-      })
-    );
-    
-    setFiles(enrichedFiles);
-    setLoading(false);
-  };
+          // Only generate ffmpeg thumbnail if we have absolutely no artwork
+          let skipThumbnail = false;
+          if (file.localPoster || file.localFanart) {
+            skipThumbnail = true;
+          }
+          
+          const generated = await generateVideoThumbnail(file.path, skipThumbnail);
+          if (generated) {
+            duration = generated.duration;
+            if (!thumbnail && !skipThumbnail) thumbnail = generated.thumbnail;
+          }
 
-  const handlePlayVideo = (video: LocalFile) => {
-    // Increment play count for Top 10
-    if (activeProfile) {
-      const counts = JSON.parse(localStorage.getItem(`netflix_playcounts_${activeProfile}`) || '{}');
-      counts[video.path] = (counts[video.path] || 0) + 1;
-      localStorage.setItem(`netflix_playcounts_${activeProfile}`, JSON.stringify(counts));
-    }
-    
-    if (settings.useExternalPlayer && settings.externalPlayerPath && window.electronAPI && window.electronAPI.playInExternalPlayer) {
-      window.electronAPI.playInExternalPlayer(settings.externalPlayerPath, video.path);
-    } else {
-      setPlayingVideo(video);
+          return { ...file, meta, thumbnail, duration, dateModified: Date.now() };
+        })
+      );
+      
+      setFiles(enrichedFiles);
+    } catch (err) {
+      console.error(err);
+      setFiles([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -152,8 +144,27 @@ export default function App() {
   useEffect(() => {
     if (libraryPath) {
       scanLibrary();
+    } else {
+      setFiles([]);
     }
   }, [libraryPath]);
+
+  const handlePlayVideo = (video: LocalFile) => {
+    // Increment play count for Top 10
+    if (activeProfile) {
+      const counts = JSON.parse(localStorage.getItem(`netflix_playcounts_${activeProfile}`) || '{}');
+      counts[video.path] = (counts[video.path] || 0) + 1;
+      localStorage.setItem(`netflix_playcounts_${activeProfile}`, JSON.stringify(counts));
+    }
+    
+    if (settings.useExternalPlayer && settings.externalPlayerPath && window.electronAPI && window.electronAPI.playInExternalPlayer) {
+      window.electronAPI.playInExternalPlayer(settings.externalPlayerPath, video.path);
+    } else {
+      setPlayingVideo(video);
+    }
+  };
+
+
 
   // Video Player Progress Tracking
   const handleTimeUpdate = () => {
@@ -280,18 +291,18 @@ export default function App() {
       {activeProfile && (
         <>
           {/* Top Navbar */}
-          <nav 
-            className="fixed top-0 w-full z-50 bg-gradient-to-b from-black/90 via-black/50 to-transparent px-10 py-4 flex items-center justify-between pointer-events-none transition-all duration-300"
-            style={{ WebkitAppRegion: 'drag' } as any}
-          >
-            <div className="flex items-center gap-8" style={{ WebkitAppRegion: 'no-drag' } as any}>
-              <h1 className="text-accent font-black text-4xl tracking-tighter pointer-events-auto shadow-black drop-shadow-md">{settings.appName}</h1>
-              <ul className="hidden md:flex gap-5 text-sm font-semibold text-gray-200 pointer-events-auto">
-                <li className="text-white drop-shadow-md cursor-pointer">Home</li>
-                <li className="drop-shadow-md hover:text-gray-300 cursor-pointer transition">TV Shows</li>
-                <li className="drop-shadow-md hover:text-gray-300 cursor-pointer transition">Movies</li>
-              </ul>
-            </div>
+            <nav 
+              className="fixed top-0 w-full z-50 bg-gradient-to-b from-black/90 via-black/50 to-transparent px-10 py-4 flex items-center justify-between pointer-events-none transition-all duration-300"
+              style={{ WebkitAppRegion: 'drag' } as any}
+            >
+              <div className="flex items-center gap-8" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                <h1 className="text-accent font-black text-2xl tracking-tighter pointer-events-auto shadow-black drop-shadow-md">{settings.appName}</h1>
+                <ul className="hidden md:flex gap-5 text-sm font-semibold text-gray-200 pointer-events-auto">
+                  <li onClick={() => setActiveTab('home')} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'home' ? 'text-white' : 'hover:text-gray-300'}`}>Home</li>
+                  <li onClick={() => setActiveTab('tv')} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'tv' ? 'text-white' : 'hover:text-gray-300'}`}>TV Shows</li>
+                  <li onClick={() => setActiveTab('movies')} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'movies' ? 'text-white' : 'hover:text-gray-300'}`}>Movies</li>
+                </ul>
+              </div>
             
             <div className="pointer-events-auto flex items-center gap-6 pr-40" style={{ WebkitAppRegion: 'no-drag' } as any}>
               <div className="flex items-center group relative cursor-pointer">
@@ -299,9 +310,9 @@ export default function App() {
               </div>
               <div className="flex items-center bg-black/50 border border-white/20 rounded px-2 hover:bg-white/10 transition cursor-pointer" onClick={handleSelectFolder}>
                 <FolderSearch className="w-4 h-4 text-gray-400 mr-2" />
-                <button className="bg-transparent text-xs text-white py-2 outline-none">
-                  {libraryPath ? 'Change Library' : 'Select Library'}
-                </button>
+                  <button className="bg-transparent text-xs text-white py-2 outline-none">
+                    {libraryPath ? 'Change Library' : 'Select Library'}
+                  </button>
               </div>
               <button 
                 onClick={() => setShowSettings(true)}
@@ -314,7 +325,17 @@ export default function App() {
                 onClick={() => setActiveProfile(null)}
                 className="p-1 hover:bg-white/10 rounded transition"
               >
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeProfile}`} className="w-8 h-8 rounded" alt="Profile" />
+                <img 
+                  src={
+                    (() => {
+                      const p = JSON.parse(localStorage.getItem('netflix_profiles') || '[]').find((p: any) => p.id === activeProfile);
+                      if (!p || p.avatar.includes('api.dicebear.com') || p.avatar.includes('./avatars/avatar')) return './avatars/key1.jpg';
+                      return p.avatar;
+                    })()
+                  } 
+                  className="w-8 h-8 rounded object-cover border border-gray-700" 
+                  alt="Profile" 
+                />
               </button>
             </div>
           </nav>
@@ -323,10 +344,10 @@ export default function App() {
         <div className="flex-grow flex flex-col items-center justify-center text-center px-4 relative z-10 pt-20">
           <button 
             onClick={handleSelectFolder}
-            className="bg-accent hover:bg-accent/80 text-white px-10 py-5 rounded font-bold text-2xl shadow-lg transition-all flex items-center gap-3 transform hover:scale-105"
+            className="mt-6 flex items-center justify-center gap-2 bg-accent text-white px-8 py-4 rounded font-bold text-xl hover:bg-red-700 transition shadow-lg hover:scale-105 active:scale-95"
           >
-            <FolderSearch className="w-8 h-8" />
-            Select Media Folder
+            <FolderSearch className="w-6 h-6" />
+            Select Library Folder
           </button>
         </div>
       ) : loading ? (
@@ -398,19 +419,25 @@ export default function App() {
 
           {/* Carousel Rows */}
           <div className="px-2 -mt-32 relative z-10 flex-grow pb-20">
-            {top10.length > 0 && (
+            {activeTab === 'home' && top10.length > 0 && (
               <ContentRow title="Top 10 in Your House Today" videos={top10} onPlay={handlePlayVideo} onInfo={setInfoVideo} isTop10={true} />
             )}
-            {continueWatching.length > 0 && (
+            {(activeTab === 'home' || activeTab === 'tv') && continueWatching.length > 0 && (
               <ContentRow title="Continue Watching" videos={continueWatching} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
             )}
-            <ContentRow title="Home" videos={files} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
-            {shows.length > 0 && (
+            
+            {activeTab === 'home' && (
+              <ContentRow title="Home" videos={files} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
+            )}
+            
+            {(activeTab === 'home' || activeTab === 'tv') && shows.length > 0 && (
               <ContentRow title="TV Shows" videos={shows} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
             )}
-            {movies.length > 0 && (
+            
+            {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (
               <ContentRow title="Movies" videos={movies} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
             )}
+            
             {collections.map(c => (
               <ContentRow key={c.title} title={c.title} videos={c.videos} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} />
             ))}

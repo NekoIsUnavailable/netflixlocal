@@ -1,4 +1,4 @@
-# NetflixLocal
+# Kudflix
 
 A fully offline, Netflix-style desktop media player for your local video collection. Built with Electron, React, Vite, and Tailwind CSS.
 
@@ -23,7 +23,7 @@ A fully offline, Netflix-style desktop media player for your local video collect
 
 ## Supported Formats
 
-NetflixLocal natively supports playing formats supported by Chromium:
+Kudflix natively supports playing formats supported by Chromium:
 - `.mp4`
 - `.webm`
 - `.mkv` (if encoded with h264/avc)
@@ -33,7 +33,7 @@ NetflixLocal natively supports playing formats supported by Chromium:
 
 ## How it works
 
-Just point the app to a folder containing your video files. NetflixLocal will:
+Just point the app to a folder containing your video files. Kudflix will:
 1. Scan the directory.
 2. Filter out non-video files.
 3. Automatically grab duration and generate a thumbnail frame.
@@ -43,7 +43,7 @@ No internet connection required. No databases. No accounts. No setup.
 
 ## Development
 
-NetflixLocal is built on an extremely fast modern web stack:
+Kudflix is built on an extremely fast modern web stack:
 
 ### Prerequisites
 - Node.js (v18 or higher)

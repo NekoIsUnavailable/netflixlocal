@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2 } from 'lucide-react';
+import { Plus, Edit2, Upload } from 'lucide-react';
+import { generateLocalAvatar } from '../utils/avatar';
 
 export interface Profile {
   id: string;
@@ -8,20 +9,32 @@ export interface Profile {
   avatar: string;
 }
 
+// All 9 Key VN avatar options
+const AVATAR_OPTIONS = Array.from({ length: 9 }, (_, i) => `./avatars/key${i + 1}.jpg`);
+
 export const DEFAULT_PROFILES: Profile[] = [
-  { id: '1', name: 'John', color: '#E50914', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John' },
-  { id: '2', name: 'Guest', color: '#0071eb', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest' }
+  { id: '1', name: 'John', color: '#E50914', avatar: AVATAR_OPTIONS[0] },
+  { id: '2', name: 'Guest', color: '#0071eb', avatar: AVATAR_OPTIONS[1] }
 ];
 
 export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [editingMode, setEditingMode] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('netflix_profiles');
     if (saved) {
-      setProfiles(JSON.parse(saved));
+      let parsed = JSON.parse(saved);
+      parsed = parsed.map((p: Profile) => {
+        if (p.avatar.includes('api.dicebear.com') || p.avatar.startsWith('data:image/svg') || p.avatar.includes('./avatars/avatar') || p.avatar.includes('.png')) {
+          return { ...p, avatar: generateLocalAvatar(p.name) };
+        }
+        return p;
+      });
+      setProfiles(parsed);
+      localStorage.setItem('netflix_profiles', JSON.stringify(parsed));
     } else {
       setProfiles(DEFAULT_PROFILES);
       localStorage.setItem('netflix_profiles', JSON.stringify(DEFAULT_PROFILES));
@@ -38,6 +51,7 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
     setProfiles(updated);
     localStorage.setItem('netflix_profiles', JSON.stringify(updated));
     setEditingProfile(null);
+    setShowAvatarPicker(false);
   };
 
   const deleteProfile = (id: string) => {
@@ -47,32 +61,91 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
     setEditingProfile(null);
   };
 
+  // Avatar Picker Overlay
+  if (editingProfile && showAvatarPicker) {
+    return (
+      <div className='fixed inset-0 z-[400] bg-[#141414] flex flex-col items-center justify-center animate-fade-in'>
+        <h1 className='text-3xl md:text-4xl font-bold text-white mb-8 tracking-tight'>Choose Avatar</h1>
+        
+        <div className='grid grid-cols-3 gap-4 mb-8'>
+          {AVATAR_OPTIONS.map((avatar, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                setEditingProfile({ ...editingProfile, avatar });
+                setShowAvatarPicker(false);
+              }}
+              className={`w-28 h-28 rounded-lg overflow-hidden border-4 transition-all duration-200 hover:scale-110 hover:shadow-lg hover:shadow-white/10 ${editingProfile.avatar === avatar ? 'border-white scale-105' : 'border-transparent hover:border-gray-500'}`}
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
+              <img src={avatar} alt={`Avatar ${i + 1}`} className='w-full h-full object-cover' />
+            </button>
+          ))}
+        </div>
+
+        {/* Custom Upload */}
+        <div className='relative mb-8'>
+          <button className='flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition'>
+            <Upload className='w-4 h-4' /> Upload Custom Image
+          </button>
+          <input 
+            type="file" 
+            accept="image/*"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                const file = e.target.files[0] as any;
+                if (file.path) {
+                  setEditingProfile({ ...editingProfile, avatar: `file:///${file.path.replace(/\\/g, '/')}` });
+                  setShowAvatarPicker(false);
+                }
+              }
+            }}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+        </div>
+
+        <button 
+          onClick={() => setShowAvatarPicker(false)}
+          className='border border-gray-500 text-gray-400 px-6 py-2 rounded font-bold hover:text-white hover:border-white transition'
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  // Edit Profile Screen
   if (editingProfile) {
     return (
-      <div className='fixed inset-0 z-[400] bg-[#141414] flex flex-col items-center justify-center'>
+      <div className='fixed inset-0 z-[400] bg-[#141414] flex flex-col items-center justify-center animate-fade-in'>
         <h1 className='text-4xl md:text-5xl font-bold text-white mb-12 tracking-tight'>Edit Profile</h1>
         <div className='flex flex-col md:flex-row items-start gap-8'>
-          <div 
-            className='w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 overflow-hidden border-4 border-transparent'
+          <button 
+            onClick={() => setShowAvatarPicker(true)}
+            className='w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 overflow-hidden border-4 border-transparent hover:border-white transition-all duration-300 group relative cursor-pointer'
             style={{ backgroundColor: editingProfile.color }}
           >
             <img src={editingProfile.avatar} alt={editingProfile.name} className='w-full h-full object-cover' />
-          </div>
+            <div className='absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center'>
+              <Edit2 className='w-8 h-8 text-white' />
+            </div>
+          </button>
           <div className='flex flex-col gap-4'>
             <input 
               type="text" 
               value={editingProfile.name}
-              onChange={e => setEditingProfile({ ...editingProfile, name: e.target.value, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${e.target.value}` })}
+              onChange={e => setEditingProfile({ ...editingProfile, name: e.target.value })}
               className='bg-gray-600 text-white px-4 py-2 text-xl font-semibold outline-none focus:ring-2 focus:ring-white rounded'
               placeholder="Name"
             />
+
             <div className='flex items-center gap-2 mt-2'>
-              <span className='text-gray-400'>Color:</span>
+              <span className='text-sm text-gray-400 font-semibold'>Color Banner</span>
               <input 
                 type="color" 
                 value={editingProfile.color}
                 onChange={e => setEditingProfile({ ...editingProfile, color: e.target.value })}
-                className='w-10 h-10 rounded cursor-pointer border-none bg-transparent'
+                className='w-8 h-8 rounded cursor-pointer border-none bg-transparent'
               />
             </div>
           </div>
@@ -80,12 +153,12 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
         <div className='flex gap-4 mt-12'>
           <button 
             onClick={() => saveProfile(editingProfile)}
-            className='bg-white text-black px-6 py-2 rounded font-bold hover:bg-gray-200 transition text-xl'
+            className='bg-white text-black px-6 py-2 rounded font-bold hover:bg-gray-200 transition-all duration-200 hover:scale-105 active:scale-95 text-xl'
           >
             Save
           </button>
           <button 
-            onClick={() => setEditingProfile(null)}
+            onClick={() => { setEditingProfile(null); setShowAvatarPicker(false); }}
             className='border border-gray-500 text-gray-400 px-6 py-2 rounded font-bold hover:text-white hover:border-white transition text-xl'
           >
             Cancel
@@ -103,27 +176,29 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
     );
   }
 
+  // Who's Watching Screen
   return (
-    <div className='fixed inset-0 z-[400] bg-[#141414] flex flex-col items-center justify-center'>
-      <h1 className='text-4xl md:text-5xl font-bold text-white mb-12 tracking-tight'>
+    <div className='fixed inset-0 z-[400] bg-[#141414] flex flex-col items-center justify-center animate-fade-in'>
+      <h1 className='text-4xl md:text-5xl font-bold text-white mb-12 tracking-tight animate-slide-down'>
         {editingMode ? 'Manage Profiles' : "Who's watching?"}
       </h1>
       
       <div className='flex gap-8 flex-wrap justify-center items-start'>
-        {profiles.map(p => (
+        {profiles.map((p, i) => (
           <div 
             key={p.id} 
-            className='group flex flex-col items-center cursor-pointer relative'
+            className='group flex flex-col items-center cursor-pointer relative animate-scale-in'
+            style={{ animationDelay: `${i * 100}ms` }}
             onClick={() => {
               if (editingMode) setEditingProfile(p);
               else onSelect(p.id);
             }}
           >
             <div 
-              className={`w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 border-4 ${editingMode ? 'border-transparent opacity-50' : 'border-transparent group-hover:border-white'} transition overflow-hidden relative`}
+              className={`w-32 h-32 md:w-40 md:h-40 rounded bg-gray-800 border-4 ${editingMode ? 'border-transparent opacity-50' : 'border-transparent group-hover:border-white group-hover:scale-105'} transition-all duration-300 overflow-hidden relative`}
               style={{ backgroundColor: p.color }}
             >
-              <img src={p.avatar} alt={p.name} className='w-full h-full object-cover opacity-90 group-hover:opacity-100' />
+              <img src={p.avatar} alt={p.name} className='w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity' />
               {editingMode && (
                 <div className='absolute inset-0 flex items-center justify-center bg-black/50'>
                   <Edit2 className='w-10 h-10 text-white' />
@@ -135,17 +210,18 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
         ))}
 
         <div 
-          className='group flex flex-col items-center cursor-pointer'
+          className='group flex flex-col items-center cursor-pointer animate-scale-in'
+          style={{ animationDelay: `${profiles.length * 100}ms` }}
           onClick={() => {
             setEditingProfile({
               id: Date.now().toString(),
               name: 'New Profile',
-              color: '#' + Math.floor(Math.random()*16777215).toString(16),
-              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=New`
+              color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'),
+              avatar: AVATAR_OPTIONS[Math.floor(Math.random() * AVATAR_OPTIONS.length)]
             });
           }}
         >
-          <div className='w-32 h-32 md:w-40 md:h-40 rounded border-2 border-gray-600 flex items-center justify-center group-hover:bg-gray-800 group-hover:text-white text-gray-600 transition'>
+          <div className='w-32 h-32 md:w-40 md:h-40 rounded border-2 border-gray-600 flex items-center justify-center group-hover:bg-gray-800 group-hover:text-white group-hover:scale-105 text-gray-600 transition-all duration-300'>
             <Plus className='w-16 h-16' />
           </div>
           <span className='mt-4 text-gray-400 group-hover:text-white transition font-semibold'>Add Profile</span>
@@ -154,11 +230,10 @@ export function ProfilesScreen({ onSelect }: { onSelect: (id: string) => void })
       
       <button 
         onClick={() => setEditingMode(!editingMode)}
-        className='mt-16 border border-gray-500 text-gray-400 px-6 py-2 rounded text-xl hover:text-white hover:border-white transition'
+        className='mt-16 border border-gray-500 text-gray-400 px-6 py-2 rounded text-xl hover:text-white hover:border-white transition-all duration-200 hover:scale-105 active:scale-95'
       >
         {editingMode ? 'Done' : 'Manage Profiles'}
       </button>
     </div>
   );
 }
-

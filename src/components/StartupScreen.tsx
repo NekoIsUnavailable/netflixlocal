@@ -35,14 +35,14 @@ export function StartupScreen({ onComplete, appName, accentColor }: { onComplete
       className={`fixed inset-0 z-[999] bg-black flex items-center justify-center transition-opacity duration-500 ${stage === 'fading' ? 'opacity-0' : 'opacity-100'}`}
     >
       <div 
-        className={`text-6xl md:text-9xl font-black tracking-tighter transition-transform duration-[3000ms] ease-out`}
+        className={`text-5xl md:text-7xl font-black tracking-tighter transition-transform duration-[3000ms] ease-out`}
         style={{
           color: accentColor,
           transform: stage === 'animating' ? 'scale(1.2)' : 'scale(1)',
           textShadow: `0 0 40px ${accentColor}80, 0 0 100px ${accentColor}40`
         }}
       >
-        {appName || 'POOPYFLIX'}
+        {appName || 'KUDFLIX'}
       </div>
     </div>
   );

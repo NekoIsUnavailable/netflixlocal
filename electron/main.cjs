@@ -18,7 +18,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: false // allow loading local files
-    }
+    },
+    icon: path.join(__dirname, '../build/icon.png')
   });
 
   if (isDev) {
